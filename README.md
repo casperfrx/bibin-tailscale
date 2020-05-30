@@ -1,25 +1,13 @@
-# bin
-a paste bin.
+# bibin
 
-A paste bin that's actually minimalist. No database requirement, no commenting functionality, no self-destructing or time bomb messages and no social media integration—just an application to quickly send snippets of text to people.
+A fork of the excellent [bin](https://github.com/w4/bin).
 
-[bin](https://bin.gy/) is written in Rust in around 200 lines of code. It's fast, it's simple, there's code highlighting and you can ⌘+A without going to the 'plain' page. It's revolutionary in the paste bin industry, disrupting markets and pushing boundaries never seen before.
+A paste bin that's ~actually~ almost minimalist. No database requirement, no commenting functionality, no self-destructing or time bomb messages and no social media integration—just an application to quickly send snippets of text to people.
 
-##### so how do you get bin?
+It is written in Rust in around 200 lines of code. It's fast, it's simple, there's code highlighting ~and you can ⌘+A without going to the 'plain' page~. It's revolutionary in the paste bin industry, disrupting markets and pushing boundaries never seen before.
 
-Download the latest version from the [releases](https://github.com/w4/bin/releases) page, extract it and run the `./bin` executable. You can also compile it from source using Cargo if you swing that way:
-
-```bash
-# nix-shell provides an environment with rust/cargo installed
-$ nix-shell
-
-[nix-shell:~/Code/bin]$ cargo build --release
-   Compiling bin v1.0.0 (/Users/jordanjd/Code/bin)
-    Finished release [optimized] target(s) in 3.61s
-
-[nix-shell:~/Code/bin]$ ./target/release/bin
-    ...
-```
+*Blizarre*: I implemented (hacked?) password protection and qr generation. To get the QR code, just append `/qr` at the
+end of the url (`https://bi.bin/cateettary.md/qr`)
 
 ##### how do you run it?
 
@@ -31,14 +19,16 @@ $ ./bin
 
 bin uses [rocket](https://rocket.rs) so you can add a [rocket config file](https://api.rocket.rs/v0.3/rocket/config/) if you like. You can set `ROCKET_PORT` in your environment if you want to change the default port (8820).
 
-bin's only configuration value is `BIN_BUFFER_SIZE` which defaults to 2000. Change this value if you want your bin to hold more pastes.
+bin's ~only~ configuration value is `BIN_BUFFER_SIZE` which defaults to 2000. Change this value if you want your bin to hold more pastes.
+
+You will need to provide the url prefix that will be used to generate the URL in the QR codes as well as the password in the rocket config file.
 
 ##### is there curl support?
 
 ```bash
-$ curl -X PUT --data 'hello world' https://bin.gy
-https://bin.gy/cateettary
-$ curl https://bin.gy/cateettary
+$ curl -X PUT --data 'hello world' https://bi.bin/PASSWORD
+https://bi.bin/cateettary
+$ curl https://bi.bin/cateettary
 hello world
 ```
 
