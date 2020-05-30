@@ -1,4 +1,4 @@
-FROM rust:1.34.2-slim-stretch AS builder
+FROM rust:1-slim-stretch AS builder
 RUN rustup install nightly-x86_64-unknown-linux-gnu
 
 RUN apt update && apt install -y libclang-dev
@@ -6,12 +6,14 @@ RUN apt update && apt install -y libclang-dev
 COPY . /sources
 WORKDIR /sources
 RUN cargo +nightly build --release
-RUN chown nobody:nogroup /sources/target/release/bin
+RUN chown nobody:nogroup /sources/target/release/bibin
 
 
 FROM debian:stretch-slim
-COPY --from=builder /sources/target/release/bin /pastebin
+COPY --from=builder /sources/target/release/bibin /opt/bibin
+
+WORKDIR /etc/secrets
 
 USER nobody
 EXPOSE 8000
-ENTRYPOINT ["/pastebin"]
+ENTRYPOINT ["/opt/bibin"]
