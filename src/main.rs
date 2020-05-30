@@ -17,7 +17,7 @@ mod io;
 mod params;
 
 use highlight::highlight;
-use io::{generate_id, get_paste, store_paste};
+use io::{get_paste, store_paste};
 use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
@@ -68,16 +68,22 @@ struct IndexForm {
 async fn submit<'s>(
     state: State<'s, Password>,
     input: Form<IndexForm>,
-    id_length: State<'_, IdLength>
+    id_length: State<'_, IdLength>,
 ) -> Result<Redirect, Status> {
-    let id = generate_id(id_length.0);
-    let uri = uri!(show_paste: &id);
     let form_data = input.into_inner();
     if form_data.password != state.0 {
         Err(Status::Unauthorized)
     } else {
-        store_paste(id, form_data.val).await;
-        Ok(Redirect::to(uri))
+        match store_paste(id_length.0, form_data.val).await {
+            Ok(id) => {
+                let uri = uri!(show_paste: &id);
+                Ok(Redirect::to(uri))
+            }
+            Err(e) => {
+                println!("ERROR: {}", e);
+                Err(Status::InternalServerError)
+            }
+        }
     }
 }
 
@@ -96,16 +102,21 @@ async fn submit_raw(
     let mut data = String::new();
     input
         .open()
-        .take(1024 * 1000)
+        .take(5 * 1024 * 1040) // Max size: 5MB
         .read_to_string(&mut data)
         .await
         .map_err(|_| Status::InternalServerError)?;
 
-    let id = generate_id(id_length.0);
-    let uri = uri!(show_paste: &id);
-    store_paste(id, data).await;
-
-    Ok(format!("{}/{}", prefix.0, uri))
+    match store_paste(id_length.0, data).await {
+        Ok(id) => {
+            let uri = uri!(show_paste: &id);
+            Ok(format!("{}/{}", prefix.0, uri))
+        }
+        Err(e) => {
+            println!("ERROR: {}", e);
+            Err(Status::InternalServerError)
+        }
+    }
 }
 
 ///
@@ -175,7 +186,7 @@ fn main() {
                 Err(_) => {
                     println!("idlength setting not provided, defaulting to 4");
                     rck.manage(IdLength(4))
-                },
+                }
                 Ok(v) => rck.manage(IdLength(v as usize)),
             };
 

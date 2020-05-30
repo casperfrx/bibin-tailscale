@@ -3,7 +3,6 @@ extern crate linked_hash_map;
 extern crate owning_ref;
 extern crate rand;
 
-use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 use linked_hash_map::LinkedHashMap;
@@ -23,7 +22,7 @@ lazy_static! {
         .map(|f| f
             .parse::<usize>()
             .expect("Failed to parse value of BIN_BUFFER_SIZE"))
-        .unwrap_or(1000usize);
+        .unwrap_or(2000usize);
 }
 
 /// Ensures `ENTRIES` is less than the size of `BIN_BUFFER_SIZE`. If it isn't then
@@ -48,19 +47,36 @@ async fn purge_old() {
 pub fn generate_id(length: usize) -> String {
     thread_local!(static KEYGEN: RefCell<gpw::PasswordGenerator> = RefCell::new(gpw::PasswordGenerator::default()));
 
-    KEYGEN.with(|k| k.borrow_mut().next()).unwrap_or_else(|| {
-        thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(10)
-            .collect::<String>()
-    })[..length].to_string()
+    // removed 0/o, i/1/l, u/v as they are too similar. with 4 char this gives us >700'000 unique ids
+    const CHARSET: &[u8] = b"abcdefghjkmnpqrstwxyz23456789";
+
+    (0..length)
+        .map(|_| {
+            let idx = thread_rng().gen_range(0, CHARSET.len());
+            CHARSET[idx] as char
+        })
+        .collect::<String>()
 }
 
 /// Stores a paste under the given id
-pub async fn store_paste(id: String, content: String) {
+pub async fn store_paste(id_length: usize, content: String) -> Result<String, &'static str> {
     purge_old().await;
 
-    ENTRIES.write().await.insert(id, content);
+    let mut id = generate_id(id_length);
+
+    let mut guard = ENTRIES.write().await;
+    let mut remaining_attempts = 5;
+    while guard.contains_key(&id) {
+        println!("WARNING: id collision");
+        id = generate_id(id_length);
+
+        remaining_attempts -= 1;
+        if remaining_attempts == 0 {
+            return Err("Could not find a suitable ID.");
+        }
+    }
+    guard.insert(id.clone(), content);
+    Ok(id)
 }
 
 /// Get a paste by id.
