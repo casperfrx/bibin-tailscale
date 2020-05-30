@@ -51,7 +51,7 @@ pub fn generate_id() -> String {
     KEYGEN.with(|k| k.borrow_mut().next()).unwrap_or_else(|| {
         thread_rng()
             .sample_iter(&Alphanumeric)
-            .take(6)
+            .take(4)
             .collect::<String>()
     })
 }
