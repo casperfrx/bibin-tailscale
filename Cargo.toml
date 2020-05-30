@@ -1,10 +1,10 @@
 [package]
-name = "bin"
-version = "1.0.3"
+name = "bibin"
+version = "1.1.0"
 description = "a paste bin."
 repository = "https://github.com/w4/bin"
 license = "WTFPL OR 0BSD"
-authors = ["Jordan Doyle <jordan@doyle.la>"]
+authors = ["Jordan Doyle <jordan@doyle.la>", "Simon M. <git@simon.marache.net>"]
 edition = "2018"
 
 [dependencies]
