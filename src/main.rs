@@ -17,11 +17,12 @@ mod io;
 mod params;
 
 use highlight::highlight;
-use io::{get_paste, store_paste};
+use io::{get_paste, store_paste, EntryData};
 use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
 
+use rocket::response::Stream;
 use rocket::fairing::AdHoc;
 use rocket::http::{ContentType, RawStr, Status};
 use rocket::request::Form;
@@ -74,7 +75,7 @@ async fn submit<'s>(
     if form_data.password != state.0 {
         Err(Status::Unauthorized)
     } else {
-        match store_paste(id_length.0, form_data.val).await {
+        match store_paste(id_length.0, EntryData::TextData(form_data.val)).await {
             Ok(id) => {
                 let uri = uri!(show_paste: &id);
                 Ok(Redirect::to(uri))
@@ -107,7 +108,7 @@ async fn submit_raw(
         .await
         .map_err(|_| Status::InternalServerError)?;
 
-    match store_paste(id_length.0, data).await {
+    match store_paste(id_length.0, EntryData::TextData(data)).await {
         Ok(id) => {
             let uri = uri!(show_paste: &id);
             Ok(format!("{}{}", prefix.0, uri))
@@ -118,6 +119,43 @@ async fn submit_raw(
         }
     }
 }
+
+///
+/// Binary endpoint
+///
+
+#[put("/b/<password>", data = "<input>")]
+async fn submit_bin(
+    input: Data,
+    state: State<'_, Password>,
+    password: String,
+    prefix: State<'_, Prefix>,
+    id_length: State<'_, IdLength>,
+) -> Result<String, Status> {
+    if password != state.0 {
+        return Err(Status::Unauthorized);
+    }
+
+    let mut data = [0;5 * 1024 * 1040];
+    let len = input
+        .open()
+        .take(5 * 1024 * 1040) // Max size: 5MB
+        .read(&mut data)
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+
+    match store_paste(id_length.0, EntryData::BinaryData(data[..len].to_vec())).await {
+        Ok(id) => {
+            let uri = uri!(show_paste: &id);
+            Ok(format!("{}{}", prefix.0, uri))
+        }
+        Err(e) => {
+            println!("ERROR: {}", e);
+            Err(Status::InternalServerError)
+        }
+    }
+}
+
 
 ///
 /// Show paste page
@@ -143,36 +181,41 @@ async fn get_qr(name: String, prefix: State<'_, Prefix>) -> Result<Content<Vec<u
 }
 
 #[get("/<key>")]
-async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Content<String>, Status> {
+async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Content<Vec<u8>>, Status> {
     let mut splitter = key.splitn(2, '.');
     let key = splitter.next().ok_or_else(|| Status::NotFound)?;
     let ext = splitter.next();
 
     let entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
 
-    if *plaintext {
-        Ok(Content(ContentType::Plain, entry.to_string()))
-    } else {
-        let code_highlighted = match ext {
-            Some(extension) => match highlight(&entry, extension) {
-                Some(html) => html,
-                None => return Err(Status::NotFound),
-            },
-            None => String::from(RawStr::from_str(entry).html_escape()),
-        };
+    match entry {
+        EntryData::BinaryData(x) => Ok(Content(ContentType::Binary, x.to_vec())),
+        EntryData::TextData(entry) => {
+            if *plaintext {
+                Ok(Content(ContentType::Plain, entry.to_string().into_bytes()))
+            } else {
+                let code_highlighted = match ext {
+                    Some(extension) => match highlight(entry, extension) {
+                        Some(html) => html,
+                        None => return Err(Status::NotFound),
+                    },
+                    None => String::from(RawStr::from_str(entry).html_escape()),
+                };
 
-        // Add <code> tags to enable line numbering with CSS
-        let html = format!(
-            "<code>{}</code>",
-            code_highlighted.replace("\n", "</code><code>")
-        );
+                // Add <code> tags to enable line numbering with CSS
+                let html = format!(
+                    "<code>{}</code>",
+                    code_highlighted.replace("\n", "</code><code>")
+                );
 
-        let content = MarkupDisplay::new_safe(Cow::Borrowed(&html), AskamaHtml);
+                let content = MarkupDisplay::new_safe(Cow::Borrowed(&html), AskamaHtml);
 
-        let template = ShowPaste { content };
-        match template.render() {
-            Ok(html) => Ok(Content(ContentType::HTML, html)),
-            Err(_) => Err(Status::InternalServerError),
+                let template = ShowPaste { content };
+                match template.render() {
+                    Ok(html) => Ok(Content(ContentType::HTML, html.into_bytes())),
+                    Err(_) => Err(Status::InternalServerError),
+                }
+            }
         }
     }
 }
@@ -220,7 +263,7 @@ fn main() {
                 Ok(rck)
             }
         }))
-        .mount("/", routes![index, submit, submit_raw, show_paste, get_qr])
+        .mount("/", routes![index, submit, submit_raw, show_paste, get_qr, submit_bin])
         .launch()
     {
         println!("Error: {}", error);

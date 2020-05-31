@@ -3,6 +3,7 @@
 A fork of the excellent [bin](https://github.com/w4/bin). I really didn't change much, even this README. I only implemented (hacked?) password protection and qr generation. To get the QR code, just append `/qr` at the
 end of the url (`https://bi.bin/cateettary.md/qr`). In order to publish a new bin, you will need to provide a password.
 
+TODO: Add binary data support (if it is not a utf-8 file, then treat it as a binary)
 ---
 
 A paste bin that's ~actually~ almost minimalist. No database requirement, no commenting functionality, no self-destructing or time bomb messages and no social media integration—just an application to quickly send snippets of text to people.

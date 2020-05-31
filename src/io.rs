@@ -16,8 +16,13 @@ use tokio::sync::{RwLock, RwLockReadGuard};
 
 type RwLockReadGuardRef<'a, T, U = T> = OwningRef<Box<RwLockReadGuard<'a, T>>, U>;
 
+pub enum EntryData {
+    BinaryData(Vec<u8>),
+    TextData(String),
+}
+
 lazy_static! {
-    static ref ENTRIES: RwLock<LinkedHashMap<String, String>> = RwLock::new(LinkedHashMap::new());
+    static ref ENTRIES: RwLock<LinkedHashMap<String, EntryData>> = RwLock::new(LinkedHashMap::new());
     static ref BUFFER_SIZE: usize = env::var("BIN_BUFFER_SIZE")
         .map(|f| f
             .parse::<usize>()
@@ -59,7 +64,7 @@ pub fn generate_id(length: usize) -> String {
 }
 
 /// Stores a paste under the given id
-pub async fn store_paste(id_length: usize, content: String) -> Result<String, &'static str> {
+pub async fn store_paste(id_length: usize, content: EntryData) -> Result<String, &'static str> {
     purge_old().await;
 
     let mut id = generate_id(id_length);
@@ -84,7 +89,7 @@ pub async fn store_paste(id_length: usize, content: String) -> Result<String, &'
 /// Returns `None` if the paste doesn't exist.
 pub async fn get_paste(
     id: &str,
-) -> Option<RwLockReadGuardRef<'_, LinkedHashMap<String, String>, String>> {
+) -> Option<RwLockReadGuardRef<'_, LinkedHashMap<String, EntryData>, EntryData>> {
     // need to box the guard until owning_ref understands Pin is a stable address
     let or = RwLockReadGuardRef::new(Box::new(ENTRIES.read().await));
 

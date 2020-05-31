@@ -49,10 +49,11 @@
         cursor: pointer;
     }
 
-    .hidden { display: none; }
 {% endblock styles %}
 
 {% block content %}
+    <input type="file" name="file"></input>
+
     <form action="/" method="post">
         <textarea name="val" placeholder="bin something" autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
 
@@ -68,20 +69,27 @@
         const form = document.querySelector('form');
         const input = document.querySelector('textarea');
         const password = document.querySelector('input[type="password"]');
+        const file = document.querySelector('input[type="file"]');
         const passwordfield = document.querySelector('.passwordfield');
         const button = document.querySelector('button[type="submit"]');
 
-        function onInput() {
-            button.classList.toggle('hidden', !input.value);
-            passwordfield.classList.toggle('hidden', !input.value);
-        }
-
-        input.addEventListener('input', onInput);
+        file.addEventListener('change', function() {
+        });
         onInput();
 
         form.addEventListener('submit', (event) => {
             if(password.value == "") {
                 alert("You need to enter the password before submitting");
+                event.preventDefault()
+            }
+            if(file.files) {
+                var xhr = new XMLHttpRequest();
+                // Add any event handlers here...
+                xhr.open('PUT', '/b/' + password.value, true);
+                xhr.addEventListener("load", function() {
+                    input.value(xhr.responseText);
+                });
+                xhr.send(file.files[0]);
                 event.preventDefault()
             }
         })
