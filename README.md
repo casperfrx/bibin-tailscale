@@ -1,6 +1,6 @@
 # bibin
 
-A fork of the excellent [bin](https://github.com/w4/bin). I really didn't change much, even this README. I implemented (hacked?) password protection and qr generation. To get the QR code, just append `/qr` at the
+A fork of the excellent [bin](https://github.com/w4/bin). I really didn't change much, even this README. I implemented (hacked?) password protection and qr generation. To get a QR code for the link, just append `/qr` at the
 end of the url (`https://bi.bin/cateettary.md/qr`). In order to publish a new bin, you will need to provide a password. It can also be used as a URL shortener.
 
 ---
@@ -34,4 +34,9 @@ hello world
 
 ##### how does syntax highlighting and URL shortening work?
 
-To get syntax highlighting you need to add the file extension at the end of your paste URL. The `.url` special extension will trigger a http redirect to whatever is in the post. This works with curl requests as well!
+To get syntax highlighting you need to add the file extension at the end of your paste URL.
+
+Special extensions:
+- `.url` will trigger a http redirect to whatever is in the post. This works with curl requests as well!
+- `.b64` will return the content base64-encoded
+- `.qr` will return the content as a qr code

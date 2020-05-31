@@ -6,6 +6,8 @@ extern crate lazy_static;
 #[macro_use]
 extern crate rocket;
 
+extern crate base64;
+
 extern crate qrcode_generator;
 
 use qrcode_generator::QrCodeEcc;
@@ -54,7 +56,6 @@ fn index() -> Result<Html<String>, Status> {
         .map_err(|_| Status::InternalServerError)
 }
 
-
 ///
 /// This type allow us to either return a Content or a Redirect to another page
 ///
@@ -62,7 +63,8 @@ fn index() -> Result<Html<String>, Status> {
 #[derive(Responder)]
 enum RedirectOrContent {
     Redirect(Redirect),
-    Content(Content<String>)
+    String(Content<String>),
+    Binary(Content<Vec<u8>>),
 }
 
 ///
@@ -148,13 +150,16 @@ async fn get_qr(name: String, prefix: State<'_, Prefix>) -> Result<Content<Vec<u
     let _entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
 
     let result =
-        qrcode_generator::to_png_to_vec(format!("{}/{}", prefix.0, &name), QrCodeEcc::Low, 1024)
+        qrcode_generator::to_png_to_vec(format!("{}/{}", prefix.0, &name), QrCodeEcc::Medium, 1024)
             .unwrap();
     Ok(Content(ContentType::PNG, result))
 }
 
 #[get("/<key>")]
-async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<RedirectOrContent, Status> {
+async fn show_paste(
+    key: String,
+    plaintext: IsPlaintextRequest,
+) -> Result<RedirectOrContent, Status> {
     let mut splitter = key.splitn(2, '.');
     let key = splitter.next().ok_or_else(|| Status::NotFound)?;
     let ext = splitter.next();
@@ -162,20 +167,35 @@ async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Redire
     let entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
 
     if let Some(extension) = ext {
-        if extension == "url" {
-            return Ok(RedirectOrContent::Redirect(Redirect::to(entry.to_string())));
+        match extension {
+            "url" => return Ok(RedirectOrContent::Redirect(Redirect::to(entry.to_string()))),
+            "qr" => match qrcode_generator::to_png_to_vec(entry, QrCodeEcc::Medium, 1024) {
+                Ok(code) => return Ok(RedirectOrContent::Binary(Content(ContentType::PNG, code))),
+                Err(e) => {
+                    println!("ERROR: when generating qr code: {}", e);
+                    return Err(Status::InternalServerError);
+                }
+            },
+            "b64" => {
+                return Ok(RedirectOrContent::String(Content(
+                    ContentType::Plain,
+                    base64::encode(entry),
+                )))
+            }
+            _ => (),
         }
     }
 
     if *plaintext {
-        Ok(RedirectOrContent::Content(Content(ContentType::Plain, entry.to_string())))
+        Ok(RedirectOrContent::String(Content(
+            ContentType::Plain,
+            entry.to_string(),
+        )))
     } else {
         let code_highlighted = match ext {
-            Some(extension) => {
-                match highlight(&entry, extension) {
-                    Some(html) => html,
-                    None => return Err(Status::NotFound),
-                }
+            Some(extension) => match highlight(&entry, extension) {
+                Some(html) => html,
+                None => return Err(Status::NotFound),
             },
             None => String::from(RawStr::from_str(entry).html_escape()),
         };
@@ -190,7 +210,7 @@ async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Redire
 
         let template = ShowPaste { content };
         match template.render() {
-            Ok(html) => Ok(RedirectOrContent::Content(Content(ContentType::HTML, html))),
+            Ok(html) => Ok(RedirectOrContent::String(Content(ContentType::HTML, html))),
             Err(_) => Err(Status::InternalServerError),
         }
     }
