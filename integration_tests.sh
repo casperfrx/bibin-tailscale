@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# These are integration smoketests. They should be moved into a proper test framework, along with unit
+# tests. The goal for now is just to have some basic things tested in a github workflow.
+
 set -euo pipefail
 
 function exit_script {
@@ -35,6 +38,9 @@ assert_equal "$(curl -s "$url")" "$sample_data1"
 
 echo "#### Check that after uploading some data with curl, we can get it back as html with a browser"
 assert_equal "$(curl -H "User-Agent: $browser_agent" -s "$url" | head -n1)"  "<!DOCTYPE html>"
+
+echo "#### Check that after uploading some data with curl, we can get the URL of the post back as a qr code (png file)"
+assert_equal "$(curl -s "$url/qr" | head -c 8)"  "$(echo -ne "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A")"
 
 echo "#### Check that after uploading some data with curl, we can get it back as a qr code (png file)"
 assert_equal "$(curl -s "$url.qr" | head -c 8)"  "$(echo -ne "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A")"
