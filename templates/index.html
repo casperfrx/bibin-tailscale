@@ -74,9 +74,15 @@
         const passwordfield = document.querySelector('.passwordfield');
         const button = document.querySelector('button[type="submit"]');
 
+        var previous_text = window.localStorage.getItem("data")
+        if (previous_text !== null) {
+            input.value = previous_text
+        }
+
         function onInput() {
             button.classList.toggle('hidden', !input.value);
             passwordfield.classList.toggle('hidden', !input.value);
+            window.localStorage.setItem("data", input.value)
         }
 
         input.addEventListener('input', onInput);
