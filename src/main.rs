@@ -1,5 +1,3 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-
 #[macro_use]
 extern crate lazy_static;
 
@@ -216,12 +214,13 @@ async fn show_paste(
     }
 }
 
-fn main() {
-    if let Err(error) = rocket::ignite()
-        .attach(AdHoc::on_attach("Reading Config", |rck| {
+#[rocket::launch]
+fn rocket() -> rocket::Rocket {
+    rocket::ignite()
+        .attach(AdHoc::on_attach("Reading Config", |mut rck| async {
             let mut error = false;
 
-            let rck = match rck.config().get_int("idlength") {
+            let mut rck = match rck.config().await.get_int("idlength") {
                 Err(_) => {
                     println!("idlength setting not provided, defaulting to 4");
                     rck.manage(IdLength(4))
@@ -229,7 +228,7 @@ fn main() {
                 Ok(v) => rck.manage(IdLength(v as usize)),
             };
 
-            let rck = match rck.config().get_string("password") {
+            let mut rck = match rck.config().await.get_string("password") {
                 Err(e) => {
                     println!(
                         "Error: {}.\nCannot read the password in the Rocket configuration",
@@ -241,7 +240,7 @@ fn main() {
                 Ok(v) => rck.manage(Password(v)),
             };
 
-            let rck = match rck.config().get_string("prefix") {
+            let rck = match rck.config().await.get_string("prefix") {
                 Err(e) => {
                     println!(
                         "Error: {}.\nCannot read the prefix in the Rocket configuration",
@@ -260,8 +259,4 @@ fn main() {
             }
         }))
         .mount("/", routes![index, submit, submit_raw, show_paste, get_qr])
-        .launch()
-    {
-        println!("Error: {}", error);
-    }
 }
