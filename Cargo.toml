@@ -20,6 +20,7 @@ syntect = "4.2"
 tokio = { version = "0.2", features = ["sync"] }
 async-trait = "0.1"
 base64 = "0.12"
+log = "0.4.11"
 
 [profile.release]
 lto = true

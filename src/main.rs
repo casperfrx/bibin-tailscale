@@ -4,6 +4,9 @@ extern crate lazy_static;
 #[macro_use]
 extern crate rocket;
 
+#[macro_use]
+extern crate log;
+
 extern crate base64;
 
 extern crate qrcode_generator;
@@ -12,10 +15,10 @@ use qrcode_generator::QrCodeEcc;
 
 extern crate askama;
 
+mod auth;
 mod highlight;
 mod io;
 mod params;
-
 use highlight::highlight;
 use io::{get_paste, store_paste};
 use params::IsPlaintextRequest;
@@ -91,22 +94,22 @@ async fn submit<'s>(
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
-                println!("ERROR: {}", e);
+                error!("[SUBMIT] {}", e);
                 Err(Status::InternalServerError)
             }
         }
     }
 }
 
-#[put("/<password>", data = "<input>")]
+#[put("/", data = "<input>")]
 async fn submit_raw(
     input: Data,
     state: State<'_, Password>,
-    password: String,
+    password: auth::AuthKey,
     prefix: State<'_, Prefix>,
     id_length: State<'_, IdLength>,
 ) -> Result<String, Status> {
-    if password != state.0 {
+    if !password.is_valid(&state.0) {
         return Err(Status::Unauthorized);
     }
 
@@ -124,7 +127,7 @@ async fn submit_raw(
             Ok(format!("{}{}", prefix.0, uri))
         }
         Err(e) => {
-            println!("ERROR: {}", e);
+            error!("[SUBMIT_RAW] {}", e);
             Err(Status::InternalServerError)
         }
     }
@@ -170,7 +173,7 @@ async fn show_paste(
             "qr" => match qrcode_generator::to_png_to_vec(entry, QrCodeEcc::Medium, 1024) {
                 Ok(code) => return Ok(RedirectOrContent::Binary(Content(ContentType::PNG, code))),
                 Err(e) => {
-                    println!("ERROR: when generating qr code: {}", e);
+                    warn!("ERROR: when generating qr code: {}", e);
                     return Err(Status::InternalServerError);
                 }
             },
@@ -222,7 +225,7 @@ fn rocket() -> rocket::Rocket {
 
             let mut rck = match rck.config().await.get_int("idlength") {
                 Err(_) => {
-                    println!("idlength setting not provided, defaulting to 4");
+                    info!("idlength setting not provided, defaulting to 4");
                     rck.manage(IdLength(4))
                 }
                 Ok(v) => rck.manage(IdLength(v as usize)),
@@ -230,8 +233,8 @@ fn rocket() -> rocket::Rocket {
 
             let mut rck = match rck.config().await.get_string("password") {
                 Err(e) => {
-                    println!(
-                        "Error: {}.\nCannot read the password in the Rocket configuration",
+                    error!(
+                        "Error: {}: Cannot read the password in the Rocket configuration",
                         e
                     );
                     error = true;
@@ -242,8 +245,8 @@ fn rocket() -> rocket::Rocket {
 
             let rck = match rck.config().await.get_string("prefix") {
                 Err(e) => {
-                    println!(
-                        "Error: {}.\nCannot read the prefix in the Rocket configuration",
+                    error!(
+                        "Error: {}: Cannot read the prefix in the Rocket configuration",
                         e
                     );
                     error = true;
