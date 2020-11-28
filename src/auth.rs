@@ -1,8 +1,22 @@
+use rocket::http::RawStr;
 use rocket::http::Status;
 use rocket::outcome::Outcome;
 use rocket::request::{self, FromRequest, Request};
+use serde::Deserialize;
 
+#[derive(Clone, Deserialize)]
+#[serde(transparent)]
 pub struct AuthKey(String);
+
+impl<'v> rocket::request::FromFormValue<'v> for AuthKey {
+    type Error = &'v RawStr;
+    fn from_form_value(value: &'v RawStr) -> Result<AuthKey, &'v RawStr> {
+        match value.parse::<String>() {
+            Ok(value) => Ok(AuthKey(value)),
+            _ => Err(value),
+        }
+    }
+}
 
 #[derive(Debug)]
 pub enum AuthError {
@@ -13,8 +27,8 @@ pub enum AuthError {
 }
 
 impl AuthKey {
-    pub fn is_valid(&self, password: &str) -> bool {
-        password == self.0
+    pub fn is_valid(&self, password: &AuthKey) -> bool {
+        password.0 == self.0
     }
 }
 
