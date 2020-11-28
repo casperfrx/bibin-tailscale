@@ -1,11 +1,11 @@
 FROM rust:1-slim-stretch AS builder
-RUN rustup install nightly-x86_64-unknown-linux-gnu
+RUN rustup install stable-x86_64-unknown-linux-gnu
 
 RUN apt update && apt install -y libclang-dev
 
 COPY . /sources
 WORKDIR /sources
-RUN cargo +nightly build --release
+RUN cargo build --release
 RUN chown nobody:nogroup /sources/target/release/bibin
 
 
