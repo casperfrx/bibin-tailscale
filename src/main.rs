@@ -15,6 +15,8 @@ use qrcode_generator::QrCodeEcc;
 
 extern crate askama;
 
+extern crate serde;
+
 mod auth;
 mod highlight;
 mod io;
@@ -24,7 +26,7 @@ use io::{get_paste, store_paste};
 use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
-
+use rocket::data::ToByteUnit;
 use rocket::fairing::AdHoc;
 use rocket::http::{ContentType, RawStr, Status};
 use rocket::request::Form;
@@ -37,9 +39,17 @@ use std::borrow::Cow;
 
 use tokio::io::AsyncReadExt;
 
-struct Password(String);
-struct Prefix(String);
-struct IdLength(usize);
+fn default_id_length() -> usize {
+    4
+}
+
+#[derive(serde::Deserialize)]
+struct BibinConfig {
+    password: String,
+    prefix: String,
+    #[serde(default = "default_id_length")]
+    id_length: usize,
+}
 
 ///
 /// Homepage
@@ -80,15 +90,14 @@ struct IndexForm {
 
 #[post("/", data = "<input>")]
 async fn submit<'s>(
-    state: State<'s, Password>,
+    config: State<'s, BibinConfig>,
     input: Form<IndexForm>,
-    id_length: State<'_, IdLength>,
 ) -> Result<Redirect, Status> {
     let form_data = input.into_inner();
-    if form_data.password != state.0 {
+    if form_data.password != config.password {
         Err(Status::Unauthorized)
     } else {
-        match store_paste(id_length.0, form_data.val).await {
+        match store_paste(config.id_length, form_data.val).await {
             Ok(id) => {
                 let uri = uri!(show_paste: &id);
                 Ok(Redirect::to(uri))
@@ -104,27 +113,24 @@ async fn submit<'s>(
 #[put("/", data = "<input>")]
 async fn submit_raw(
     input: Data,
-    state: State<'_, Password>,
+    config: State<'_, BibinConfig>,
     password: auth::AuthKey,
-    prefix: State<'_, Prefix>,
-    id_length: State<'_, IdLength>,
 ) -> Result<String, Status> {
-    if !password.is_valid(&state.0) {
+    if !password.is_valid(&config.password) {
         return Err(Status::Unauthorized);
     }
 
     let mut data = String::new();
     input
-        .open()
-        .take(5 * 1024 * 1040) // Max size: 5MB
+        .open(5.megabytes())
         .read_to_string(&mut data)
         .await
         .map_err(|_| Status::InternalServerError)?;
 
-    match store_paste(id_length.0, data).await {
+    match store_paste(config.id_length, data).await {
         Ok(id) => {
             let uri = uri!(show_paste: &id);
-            Ok(format!("{}{}", prefix.0, uri))
+            Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {
             error!("[SUBMIT_RAW] {}", e);
@@ -144,15 +150,18 @@ struct ShowPaste<'a> {
 }
 
 #[get("/<name>/qr")]
-async fn get_qr(name: String, prefix: State<'_, Prefix>) -> Result<Content<Vec<u8>>, Status> {
+async fn get_qr(name: String, config: State<'_, BibinConfig>) -> Result<Content<Vec<u8>>, Status> {
     let mut splitter = name.splitn(2, '.');
-    let key = splitter.next().ok_or_else(|| Status::NotFound)?;
+    let key = splitter.next().ok_or(Status::NotFound)?;
 
-    let _entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
+    let _entry = &*get_paste(key).await.ok_or(Status::NotFound)?;
 
-    let result =
-        qrcode_generator::to_png_to_vec(format!("{}/{}", prefix.0, &name), QrCodeEcc::Medium, 1024)
-            .unwrap();
+    let result = qrcode_generator::to_png_to_vec(
+        format!("{}/{}", config.prefix, &name),
+        QrCodeEcc::Medium,
+        1024,
+    )
+    .unwrap();
     Ok(Content(ContentType::PNG, result))
 }
 
@@ -162,10 +171,10 @@ async fn show_paste(
     plaintext: IsPlaintextRequest,
 ) -> Result<RedirectOrContent, Status> {
     let mut splitter = key.splitn(2, '.');
-    let key = splitter.next().ok_or_else(|| Status::NotFound)?;
+    let key = splitter.next().ok_or(Status::NotFound)?;
     let ext = splitter.next();
 
-    let entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
+    let entry = &*get_paste(key).await.ok_or(Status::NotFound)?;
 
     if let Some(extension) = ext {
         match extension {
@@ -220,46 +229,6 @@ async fn show_paste(
 #[rocket::launch]
 fn rocket() -> rocket::Rocket {
     rocket::ignite()
-        .attach(AdHoc::on_attach("Reading Config", |mut rck| async {
-            let mut error = false;
-
-            let mut rck = match rck.config().await.get_int("idlength") {
-                Err(_) => {
-                    info!("idlength setting not provided, defaulting to 4");
-                    rck.manage(IdLength(4))
-                }
-                Ok(v) => rck.manage(IdLength(v as usize)),
-            };
-
-            let mut rck = match rck.config().await.get_string("password") {
-                Err(e) => {
-                    error!(
-                        "Error: {}: Cannot read the password in the Rocket configuration",
-                        e
-                    );
-                    error = true;
-                    rck
-                }
-                Ok(v) => rck.manage(Password(v)),
-            };
-
-            let rck = match rck.config().await.get_string("prefix") {
-                Err(e) => {
-                    error!(
-                        "Error: {}: Cannot read the prefix in the Rocket configuration",
-                        e
-                    );
-                    error = true;
-                    rck
-                }
-                Ok(v) => rck.manage(Prefix(v)),
-            };
-
-            if error {
-                Err(rck)
-            } else {
-                Ok(rck)
-            }
-        }))
         .mount("/", routes![index, submit, submit_raw, show_paste, get_qr])
+        .attach(AdHoc::config::<BibinConfig>())
 }

@@ -13,7 +13,7 @@ pub enum AuthError {
 }
 
 impl AuthKey {
-    pub fn is_valid(self: &Self, password: &str) -> bool {
+    pub fn is_valid(&self, password: &str) -> bool {
         password == self.0
     }
 }
