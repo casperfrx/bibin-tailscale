@@ -28,14 +28,14 @@ function assert_equal {
 trap error_script ERR
 trap exit_script EXIT
 
-prefix=http://localhost:8000/
+prefix=http://localhost:8000
 password=a69711b1-3d39-4344-b97a-ba91e2f5adca
 browser_agent="Mozilla/5.0 (X11; Linux x86_64; rv:76.0) Gecko/20100101 Firefox/76.0"
 
-env "ROCKET_PASSWORD=$password" ROCKET_LOG="normal" "ROCKET_PREFIX=$prefix" ROCKET_ENV=production cargo run --release&
+env "ROCKET_PASSWORD=$password" ROCKET_LOG="normal" "ROCKET_PREFIX=$prefix" ROCKET_ENV=production cargo run&
 bibin_pid=$!
 
-while ! curl -s "$prefix" > /dev/null; do
+while ! curl -fs "$prefix" > /dev/null; do
   sleep 0.5
 done
 echo "Bibin started, testing"
@@ -43,27 +43,31 @@ echo "Bibin started, testing"
 echo "#### Check that after uploading some data with curl (X-API-Key header), we can get it back as text with curl"
 sample_data1="hello world"
 url="$(curl -X PUT -H "X-API-Key: $password" --data "$sample_data1" "$prefix")"
-assert_equal "$(curl -s "$url")" "$sample_data1"
+assert_equal "$(curl -fs "$url")" "$sample_data1"
+
+echo "#### Check that after uploading some data with curl (Authorization header), we can delete it"
+url="$(curl -X PUT -u "a:$password" --data "$sample_data1" "$prefix")"
+curl -X DELETE -u "a:$password" "$url"
+# Retrieving or deleting it should fail now
+if curl -fs "$url"; then false; fi
+if curl -fs -X DELETE -u "a:$password" "$url"; then false; fi
 
 echo "#### Check that after uploading some data with curl (Authorization header), we can get it back as text with curl"
-sample_data1="hello world"
 url="$(curl -X PUT -u "a:$password" --data "$sample_data1" "$prefix")"
-assert_equal "$(curl -s "$url")" "$sample_data1"
-
-
+assert_equal "$(curl -fs "$url")" "$sample_data1"
 
 echo "#### Check that after uploading some data with curl, we can get it back as html with a browser"
-assert_equal "$(curl -H "User-Agent: $browser_agent" -s "$url" | head -n1)"  "<!DOCTYPE html>"
+assert_equal "$(curl -H "User-Agent: $browser_agent" -fs "$url" | head -n1)"  "<!DOCTYPE html>"
 
 echo "#### Check that after uploading some data with curl, we can get the URL of the post back as a qr code (png file)"
-assert_equal "$(curl -s "$url/qr" | head -c 8)"  "$(echo -ne "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A")"
+assert_equal "$(curl -fs "$url/qr" | head -c 8)"  "$(echo -ne "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A")"
 
 echo "#### Check that after uploading some data with curl, we can get it back as a qr code (png file)"
-assert_equal "$(curl -s "$url.qr" | head -c 8)"  "$(echo -ne "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A")"
+assert_equal "$(curl -fs "$url.qr" | head -c 8)"  "$(echo -ne "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A")"
 
 echo "#### Check that after uploading some data with a browser (POST), we can get it back as text with curl"
 sample_data2="hello world 2"
-data_after_redirect="$(curl -L -s \
+data_after_redirect="$(curl -L -fs \
             -d password="$password" -d val="$sample_data2" "$prefix")"
 assert_equal "$data_after_redirect" "$sample_data2"
 
@@ -71,26 +75,26 @@ assert_equal "$data_after_redirect" "$sample_data2"
 echo "#### Check that it can handle 10'000 requests (There will be ID collisions)"
 num=0
 while test "$num" -lt 250; do
-    curl -L -s -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
+    curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
     bg_process1="$!"
 
-    curl -L -s -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
+    curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
     bg_process2="$!"
 
-    curl -L -s -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
+    curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
     bg_process3="$!"
 
-    url="$(curl -s -X PUT -H "X-API-Key: $password" --data "$sample_data2 - $num" "$prefix")"
-    assert_equal "$(curl -s "$url")" "$sample_data2 - $num"
+    url="$(curl -fs -X PUT -H "X-API-Key: $password" --data "$sample_data2 - $num" "$prefix")"
+    assert_equal "$(curl -fs "$url")" "$sample_data2 - $num"
     wait "$bg_process1" "$bg_process2" "$bg_process3"
     num="$(( num + 1 ))"
 done
 
 echo "#### Testing invalid credentials"
-if curl -s -f -X PUT -H "X-API-Key: dummy" --data "$sample_data2 - $num" "$prefix"; then false; fi
-if curl -s -f -X PUT -H "X-API-Key" --data "$sample_data2 - $num" "$prefix"; then false; fi
-if curl -s -f -X PUT -H "Authorization: basic ffffffff" --data "$sample_data2 - $num" "$prefix"; then false; fi
-if curl -s -f -X PUT -u "b:" --data "$sample_data2 - $num" "$prefix"; then false; fi
-if curl -s -f -X PUT -H "X-API-Key: $password\0" --data "$sample_data2 - $num" "$prefix"; then false; fi
+if curl -fs -X PUT -H "X-API-Key: dummy" --data "$sample_data2 - $num" "$prefix"; then false; fi
+if curl -fs -X PUT -H "X-API-Key" --data "$sample_data2 - $num" "$prefix"; then false; fi
+if curl -fs -X PUT -H "Authorization: basic ffffffff" --data "$sample_data2 - $num" "$prefix"; then false; fi
+if curl -fs -X PUT -u "b:" --data "$sample_data2 - $num" "$prefix"; then false; fi
+if curl -fs -X PUT -H "X-API-Key: $password\0" --data "$sample_data2 - $num" "$prefix"; then false; fi
 
 echo "All tests OK"

@@ -59,6 +59,15 @@ pub fn generate_id(length: usize) -> String {
         .collect::<String>()
 }
 
+/// Delete a paste under the given id
+pub async fn delete_paste(id: String) -> Result<String, &'static str> {
+    let mut guard = ENTRIES.write().await;
+    match guard.remove(&id) {
+        Some(id) => Ok(id),
+        None => Err("Unknown ID"),
+    }
+}
+
 /// Stores a paste under the given id
 pub async fn store_paste(id_length: usize, content: String) -> Result<String, &'static str> {
     purge_old().await;
