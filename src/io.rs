@@ -5,47 +5,69 @@ extern crate rand;
 
 use rand::{thread_rng, Rng};
 
-use linked_hash_map::LinkedHashMap;
-
-use owning_ref::OwningRef;
-
 use std::cell::RefCell;
-use std::env;
 
-use tokio::sync::{RwLock, RwLockReadGuard};
+use sqlx::Done;
+use sqlx::Row;
+use std::fmt::Display;
 
-type RwLockReadGuardRef<'a, T, U = T> = OwningRef<Box<RwLockReadGuard<'a, T>>, U>;
+use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
+use sqlx::Executor;
 
-// TODO: Use the normal config, having this lone config passed by env only is really weird
-lazy_static! {
-    static ref ENTRIES: RwLock<LinkedHashMap<String, String>> = RwLock::new(LinkedHashMap::new());
-    static ref BUFFER_SIZE: usize = env::var("BIN_BUFFER_SIZE")
-        .map(|f| f
-            .parse::<usize>()
-            .expect("Failed to parse value of BIN_BUFFER_SIZE"))
-        .unwrap_or(2000usize);
+pub struct WritePool(SqlitePool);
+
+impl WritePool {
+    pub async fn new(file_name: &str) -> Result<WritePool, IOError> {
+        Ok(WritePool(
+            sqlx::pool::PoolOptions::<sqlx::Sqlite>::new()
+                .max_connections(1)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(file_name)
+                        .create_if_missing(true)
+                        .read_only(false),
+                )
+                .await?,
+        ))
+    }
+
+    pub async fn init(&self) -> Result<(), IOError> {
+        let mut cnx = self.0.acquire().await?;
+        cnx.execute(
+            "CREATE TABLE IF NOT EXISTS entries (
+            internal_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id VARCHAR(16) UNIQUE,
+            data TEXT NOT NULL
+        )",
+        )
+        .await?;
+
+        cnx.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_id ON entries(id)")
+            .await?;
+
+        Ok(())
+    }
 }
 
-/// Ensures `ENTRIES` is less than the size of `BIN_BUFFER_SIZE`. If it isn't then
-/// `ENTRIES.len() - BIN_BUFFER_SIZE` elements will be popped off the front of the map.
-///
-/// During the purge, `ENTRIES` is locked and the current thread will block.
-async fn purge_old() {
-    let entries_len = ENTRIES.read().await.len();
+pub struct ReadPool(SqlitePool);
 
-    if entries_len > *BUFFER_SIZE {
-        let to_remove = entries_len - *BUFFER_SIZE;
-
-        let mut entries = ENTRIES.write().await;
-
-        for _ in 0..to_remove {
-            entries.pop_front();
-        }
+impl ReadPool {
+    pub async fn new(file_name: &str, max_connections: u32) -> Result<ReadPool, IOError> {
+        Ok(ReadPool(
+            sqlx::pool::PoolOptions::<sqlx::Sqlite>::new()
+                .max_connections(max_connections)
+                .connect_with(
+                    SqliteConnectOptions::new()
+                        .filename(file_name)
+                        .read_only(true),
+                )
+                .await?,
+        ))
     }
 }
 
 /// Generates a 'pronounceable' random ID using gpw
-pub fn generate_id(length: usize) -> String {
+fn generate_id(length: usize) -> String {
     thread_local!(static KEYGEN: RefCell<gpw::PasswordGenerator> = RefCell::new(gpw::PasswordGenerator::default()));
 
     // removed 0/o, i/1/l, u/v as they are too similar. with 4 char this gives us >700'000 unique ids
@@ -59,48 +81,124 @@ pub fn generate_id(length: usize) -> String {
         .collect::<String>()
 }
 
+pub async fn remove_old(
+    cnx: &mut sqlx::pool::PoolConnection<sqlx::Sqlite>,
+    max_entries: i32,
+) -> Result<u64, IOError> {
+    let result = sqlx::query(
+        "DELETE FROM entries WHERE internal_id IN (
+            SELECT internal_id FROM entries ORDER BY internal_id ASC LIMIT (
+                SELECT MAX(COUNT(*) - ?,0)  FROM entries))",
+    )
+    .bind(max_entries)
+    .execute(cnx)
+    .await?;
+
+    Ok(result.rows_affected())
+}
+
 /// Delete a paste under the given id
-pub async fn delete_paste(id: String) -> Result<String, &'static str> {
-    let mut guard = ENTRIES.write().await;
-    match guard.remove(&id) {
-        Some(id) => Ok(id),
-        None => Err("Unknown ID"),
+pub async fn delete_paste(pool: &WritePool, id: String) -> Result<String, IOError> {
+    let result = sqlx::query("DELETE FROM entries WHERE id = ?")
+        .bind(&id)
+        .execute(&pool.0)
+        .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(IOError("Not found".to_owned()));
     }
+    return Ok(id);
 }
 
 /// Stores a paste under the given id
-pub async fn store_paste(id_length: usize, content: String) -> Result<String, &'static str> {
-    purge_old().await;
+pub async fn store_paste(
+    pool: &WritePool,
+    id_length: usize,
+    max_entries: i32,
+    content: String,
+) -> Result<String, IOError> {
+    // If we acquire the connection, nobody else can get it
+    let mut cnx = pool.0.acquire().await?;
 
-    let mut id = generate_id(id_length);
+    let id = generate_id(id_length);
+    let result = sqlx::query("INSERT OR IGNORE INTO entries (id, data) VALUES (?, ?)")
+        .bind(&id)
+        .bind(&content)
+        .execute(&mut cnx)
+        .await?;
 
-    let mut guard = ENTRIES.write().await;
-    let mut remaining_attempts = 5;
-    while guard.contains_key(&id) {
-        println!("WARNING: id collision");
-        id = generate_id(id_length);
-
-        remaining_attempts -= 1;
-        if remaining_attempts == 0 {
-            return Err("Could not find a suitable ID.");
-        }
+    if result.rows_affected() == 1 {
+        return Ok(id);
     }
-    guard.insert(id.clone(), content);
-    Ok(id)
+
+    let entries = sqlx::query("select count(*) from entries")
+        .fetch_one(&mut cnx)
+        .await?
+        .get::<i32, usize>(0);
+
+    warn!(
+        "ID Collision ({} entries), cleaning up old entries and retrying",
+        entries
+    );
+    let nb_entries_removed = remove_old(&mut cnx, max_entries).await?;
+    warn!("Removed {} entries", nb_entries_removed);
+
+    let mut retries = 0;
+    let max_retries = 20;
+    while retries < max_entries {
+        warn!("Another ID Collision: {}/{}", retries, max_retries);
+        let id = generate_id(id_length);
+        let result = sqlx::query("INSERT OR IGNORE INTO entries (id, data) VALUES (?, ?)")
+            .bind(&id)
+            .bind(&content)
+            .execute(&mut cnx)
+            .await?;
+
+        if result.rows_affected() == 1 {
+            return Ok(id);
+        }
+        retries += 1;
+    }
+
+    warn!("ID Collision again, last attempt");
+    let id = generate_id(id_length);
+    sqlx::query("INSERT INTO entries (id, data) VALUES (?, ?)")
+        .bind(&generate_id(id_length))
+        .bind(&content)
+        .execute(&mut cnx)
+        .await?;
+
+    return Ok(id);
 }
 
 /// Get a paste by id.
 ///
 /// Returns `None` if the paste doesn't exist.
-pub async fn get_paste(
-    id: &str,
-) -> Option<RwLockReadGuardRef<'_, LinkedHashMap<String, String>, String>> {
-    // need to box the guard until owning_ref understands Pin is a stable address
-    let or = RwLockReadGuardRef::new(Box::new(ENTRIES.read().await));
 
-    if or.contains_key(id) {
-        Some(or.map(|x| x.get(id).unwrap()))
-    } else {
-        None
+pub async fn get_paste(pool: &ReadPool, id: &str) -> Result<Option<String>, IOError> {
+    let result = sqlx::query("SELECT data FROM entries WHERE id = ?")
+        .bind(id)
+        .fetch_one(&pool.0)
+        .await;
+
+    match result {
+        Err(sqlx::Error::RowNotFound) => Ok(None),
+        Ok(row) => Ok(row.get(0)),
+        Err(e) => Err(e.into()),
+    }
+}
+
+#[derive(Debug)]
+pub struct IOError(String);
+
+impl Display for IOError {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+        f.write_str(&self.0)
+    }
+}
+
+impl From<sqlx::error::Error> for IOError {
+    fn from(e: sqlx::error::Error) -> IOError {
+        IOError(format!("DB Error: {}", e))
     }
 }
