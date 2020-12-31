@@ -19,6 +19,19 @@
         line-height: inherit;
     }
 
+    .passwordfield {
+        position: absolute;
+        bottom: 5rem;
+        right: 1rem;
+
+        border: none;
+
+        color: white;
+        font-size: 1.5rem;
+
+        cursor: pointer;
+    }
+
     button[type="submit"] {
         position: absolute;
         bottom: 1rem;
@@ -36,29 +49,41 @@
         cursor: pointer;
     }
 
-    button[type="submit"].hidden { display: none; }
+    .hidden { display: none; }
 {% endblock styles %}
 
 {% block content %}
     <form action="/" method="post">
         <textarea name="val" placeholder="bin something" autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
 
-        <button type="submit" title="&#x2318;+&#x23ce;">&#x270e;</button>
+        <div class="passwordfield">
+            <label for="password" title="Enter password">&#128274;</label>
+            <input type="password" name="password"></input>
+        </div>
+
+        <button type="submit" title="Submit the file">&#x270e;</button>
     </form>
 
     <script>
         const form = document.querySelector('form');
         const input = document.querySelector('textarea');
+        const password = document.querySelector('input[type="password"]');
+        const passwordfield = document.querySelector('.passwordfield');
         const button = document.querySelector('button[type="submit"]');
 
-        const onInput = () => button.classList.toggle('hidden', !input.value);
+        function onInput() {
+            button.classList.toggle('hidden', !input.value);
+            passwordfield.classList.toggle('hidden', !input.value);
+        }
+
         input.addEventListener('input', onInput);
         onInput();
 
-        document.body.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || e.altKey)) {
-                form.submit();
+        form.addEventListener('submit', (event) => {
+            if(password.value == "") {
+                alert("You need to enter the password before submitting");
+                event.preventDefault()
             }
-        });
+        })
     </script>
 {% endblock content %}

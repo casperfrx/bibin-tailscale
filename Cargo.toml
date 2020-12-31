@@ -13,9 +13,9 @@ linked-hash-map = "0.5"
 rocket = { git = "https://github.com/SergioBenitez/Rocket", branch = "async" }
 askama = "0.9"
 lazy_static = "1.4"
-rand = { version = "0.7", features = ["nightly"] }
+rand = "0.7"
 gpw = "0.1"
-syntect = "4.1"
+syntect = "4.2"
 serde_derive = "1.0"
 tokio = { version = "0.2", features = ["sync"] }
 async-trait = "0.1"

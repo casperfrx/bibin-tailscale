@@ -23,11 +23,16 @@ use rocket::request::Form;
 use rocket::response::content::{Content, Html};
 use rocket::response::Redirect;
 use rocket::Data;
+use rocket::fairing::AdHoc;
+use rocket::State;
 
 use std::borrow::Cow;
-use std::io::Read;
 
 use tokio::io::AsyncReadExt;
+
+
+struct Password(String);
+
 
 ///
 /// Homepage
@@ -49,21 +54,31 @@ fn index() -> Result<Html<String>, Status> {
 /// Submit Paste
 ///
 
-#[derive(FromForm)]
+#[derive(FromForm, Clone)]
 struct IndexForm {
     val: String,
+    password: String
 }
 
 #[post("/", data = "<input>")]
-async fn submit(input: Form<IndexForm>) -> Redirect {
+async fn submit<'s>(state: State<'s, Password>, input: Form<IndexForm>) -> Result<Redirect, Status> {
     let id = generate_id();
     let uri = uri!(show_paste: &id);
-    store_paste(id, input.into_inner().val).await;
-    Redirect::to(uri)
+    let form_data = input.into_inner();
+    return if form_data.password != state.0 {
+        Err(Status::Unauthorized)
+    } else {
+        store_paste(id, form_data.val).await;
+        Ok(Redirect::to(uri))
+    }
 }
 
-#[put("/", data = "<input>")]
-async fn submit_raw(input: Data, host: HostHeader<'_>) -> Result<String, Status> {
+#[put("/<password>", data = "<input>")]
+async fn submit_raw<'s>(input: Data, state: State<'s, Password>, password:String, host: HostHeader<'_>) -> Result<String, Status> {
+    if password != state.0 {
+        return Err(Status::Unauthorized);
+    }
+
     let mut data = String::new();
     input.open().take(1024 * 1000)
         .read_to_string(&mut data).await
@@ -125,8 +140,26 @@ async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Conten
     }
 }
 
+
 fn main() {
-    rocket::ignite()
+    if let Err(error) = rocket::ignite()
+        .attach(AdHoc::on_attach("Password Config", |rck| {
+            println!("Adding password from config...");
+            let password = rck.config()
+                .get_string("password");
+            match password {
+                Err(e) =>  {
+                    println!("Error: {}.\nCannot read a password in the Rocket configuration", e);
+                    Err(rck)
+                }
+                Ok(password) => {
+                    Ok(rck.manage(Password(password)))
+                }
+            }
+        })
+        )
         .mount("/", routes![index, submit, submit_raw, show_paste])
-        .launch();
+        .launch() {
+            println!("Error: {}", error);
+        }
 }
