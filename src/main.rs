@@ -26,6 +26,7 @@ use io::{get_paste, store_paste};
 use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
+use auth::AuthKey;
 use rocket::data::ToByteUnit;
 use rocket::fairing::AdHoc;
 use rocket::http::{ContentType, RawStr, Status};
@@ -45,7 +46,7 @@ fn default_id_length() -> usize {
 
 #[derive(serde::Deserialize)]
 struct BibinConfig {
-    password: String,
+    password: AuthKey,
     prefix: String,
     #[serde(default = "default_id_length")]
     id_length: usize,
@@ -85,7 +86,7 @@ enum RedirectOrContent {
 #[derive(FromForm, Clone)]
 struct IndexForm {
     val: String,
-    password: String,
+    password: AuthKey,
 }
 
 #[post("/", data = "<input>")]
@@ -94,7 +95,7 @@ async fn submit<'s>(
     input: Form<IndexForm>,
 ) -> Result<Redirect, Status> {
     let form_data = input.into_inner();
-    if form_data.password != config.password {
+    if !form_data.password.is_valid(&config.password) {
         Err(Status::Unauthorized)
     } else {
         match store_paste(config.id_length, form_data.val).await {

@@ -16,6 +16,7 @@ use tokio::sync::{RwLock, RwLockReadGuard};
 
 type RwLockReadGuardRef<'a, T, U = T> = OwningRef<Box<RwLockReadGuard<'a, T>>, U>;
 
+// TODO: Use the normal config, having this lone config passed by env only is really weird
 lazy_static! {
     static ref ENTRIES: RwLock<LinkedHashMap<String, String>> = RwLock::new(LinkedHashMap::new());
     static ref BUFFER_SIZE: usize = env::var("BIN_BUFFER_SIZE")
