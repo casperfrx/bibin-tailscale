@@ -36,6 +36,7 @@ use tokio::io::AsyncReadExt;
 
 struct Password(String);
 struct Prefix(String);
+struct IdLength(usize);
 
 ///
 /// Homepage
@@ -67,8 +68,9 @@ struct IndexForm {
 async fn submit<'s>(
     state: State<'s, Password>,
     input: Form<IndexForm>,
+    id_length: State<'_, IdLength>
 ) -> Result<Redirect, Status> {
-    let id = generate_id();
+    let id = generate_id(id_length.0);
     let uri = uri!(show_paste: &id);
     let form_data = input.into_inner();
     if form_data.password != state.0 {
@@ -85,6 +87,7 @@ async fn submit_raw(
     state: State<'_, Password>,
     password: String,
     prefix: State<'_, Prefix>,
+    id_length: State<'_, IdLength>,
 ) -> Result<String, Status> {
     if password != state.0 {
         return Err(Status::Unauthorized);
@@ -98,7 +101,7 @@ async fn submit_raw(
         .await
         .map_err(|_| Status::InternalServerError)?;
 
-    let id = generate_id();
+    let id = generate_id(id_length.0);
     let uri = uri!(show_paste: &id);
     store_paste(id, data).await;
 
@@ -167,6 +170,14 @@ fn main() {
     if let Err(error) = rocket::ignite()
         .attach(AdHoc::on_attach("Reading Config", |rck| {
             let mut error = false;
+
+            let rck = match rck.config().get_int("idlength") {
+                Err(_) => {
+                    println!("idlength setting not provided, defaulting to 4");
+                    rck.manage(IdLength(4))
+                },
+                Ok(v) => rck.manage(IdLength(v as usize)),
+            };
 
             let rck = match rck.config().get_string("password") {
                 Err(e) => {

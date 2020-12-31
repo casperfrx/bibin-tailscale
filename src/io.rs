@@ -45,15 +45,15 @@ async fn purge_old() {
 }
 
 /// Generates a 'pronounceable' random ID using gpw
-pub fn generate_id() -> String {
+pub fn generate_id(length: usize) -> String {
     thread_local!(static KEYGEN: RefCell<gpw::PasswordGenerator> = RefCell::new(gpw::PasswordGenerator::default()));
 
     KEYGEN.with(|k| k.borrow_mut().next()).unwrap_or_else(|| {
         thread_rng()
             .sample_iter(&Alphanumeric)
-            .take(4)
+            .take(10)
             .collect::<String>()
-    })
+    })[..length].to_string()
 }
 
 /// Stores a paste under the given id
