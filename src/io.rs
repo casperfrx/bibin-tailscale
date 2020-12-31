@@ -110,7 +110,7 @@ pub async fn delete_paste(pool: &WritePool, id: String) -> Result<String, IOErro
     return Ok(id);
 }
 
-/// Stores a paste under the given id
+/// Stores a paste under a new id
 pub async fn store_paste(
     pool: &WritePool,
     id_length: usize,
@@ -164,6 +164,23 @@ pub async fn store_paste(
     let id = generate_id(id_length);
     sqlx::query("INSERT INTO entries (id, data) VALUES (?, ?)")
         .bind(&generate_id(id_length))
+        .bind(&content)
+        .execute(&mut cnx)
+        .await?;
+
+    return Ok(id);
+}
+
+/// Stores a paste under a new id
+pub async fn store_paste_given_id(
+    pool: &WritePool,
+    id: String,
+    content: String,
+) -> Result<String, IOError> {
+    let mut cnx = pool.0.acquire().await?;
+
+    let _result = sqlx::query("INSERT OR REPLACE INTO entries (id, data) VALUES (?, ?)")
+        .bind(&id)
         .bind(&content)
         .execute(&mut cnx)
         .await?;

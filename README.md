@@ -48,6 +48,8 @@ $ curl https://bi.bin/cateettary
 hello world
 # Delete a paste
 $ curl -X DELETE -H "X-API-Key:PASSWORD" https://bi.bin/cateettary
+# Upload a new paste at a given id. Would override any existing paste there.
+$ curl -X PUT -u "anything:PASSWORD" --data 'hello world' https://bi.bin/manualid
 ```
 
 ### What can bibin do?

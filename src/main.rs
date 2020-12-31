@@ -19,7 +19,7 @@ mod highlight;
 mod io;
 mod params;
 use highlight::Highlighter;
-use io::{delete_paste, get_paste, store_paste};
+use io::{delete_paste, get_paste, store_paste, store_paste_given_id};
 use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
@@ -128,6 +128,30 @@ async fn submit<'s>(
     }
 }
 
+#[post("/<key>", data = "<input>")]
+async fn submit_with_key<'s>(
+    config: State<'s, BibinConfig>,
+    input: Form<IndexForm>,
+    pool: State<'_, WritePool>,
+    key: String,
+) -> Result<Redirect, Status> {
+    let form_data = input.into_inner();
+    if !form_data.password.is_valid(&config.password) {
+        Err(Status::Unauthorized)
+    } else {
+        match store_paste_given_id(&pool, key, form_data.val).await {
+            Ok(id) => {
+                let uri = uri!(show_paste: &id);
+                Ok(Redirect::to(uri))
+            }
+            Err(e) => {
+                error!("[SUBMIT] {}", e);
+                Err(Status::InternalServerError)
+            }
+        }
+    }
+}
+
 #[put("/", data = "<input>")]
 async fn submit_raw(
     input: Data,
@@ -147,6 +171,37 @@ async fn submit_raw(
         .map_err(|_| Status::InternalServerError)?;
 
     match store_paste(&pool, config.id_length, config.max_entries, data).await {
+        Ok(id) => {
+            let uri = uri!(show_paste: &id);
+            Ok(format!("{}{}", config.prefix, uri))
+        }
+        Err(e) => {
+            error!("[SUBMIT_RAW] {}", e);
+            Err(Status::InternalServerError)
+        }
+    }
+}
+
+#[put("/<key>", data = "<input>")]
+async fn submit_raw_with_key(
+    input: Data,
+    config: State<'_, BibinConfig>,
+    password: auth::AuthKey,
+    pool: State<'_, WritePool>,
+    key: String,
+) -> Result<String, Status> {
+    if !password.is_valid(&config.password) {
+        return Err(Status::Unauthorized);
+    }
+
+    let mut data = String::new();
+    input
+        .open(5.megabytes())
+        .read_to_string(&mut data)
+        .await
+        .map_err(|_| Status::InternalServerError)?;
+
+    match store_paste_given_id(&pool, key, data).await {
         Ok(id) => {
             let uri = uri!(show_paste: &id);
             Ok(format!("{}{}", config.prefix, uri))
@@ -323,7 +378,16 @@ async fn rocket() -> rocket::Rocket {
 
     rkt.mount(
         "/",
-        routes![index, submit, submit_raw, show_paste, get_qr, delete],
+        routes![
+            index,
+            submit,
+            submit_with_key,
+            submit_raw,
+            submit_raw_with_key,
+            show_paste,
+            get_qr,
+            delete
+        ],
     )
     .manage(config)
     .manage(highlighter)

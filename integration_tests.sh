@@ -10,7 +10,7 @@ function exit_script {
     echo "Cleaning up $bibin_pid"
     kill "$bibin_pid"
   else
-    echo "No serevr was started"
+    echo "No server was started"
   fi
 }
 
@@ -36,8 +36,8 @@ DB_FILE=tests.db
 rm -f "$DB_FILE"{,-shm,-wal}
 env "ROCKET_SECRET_KEY=jhqTG1chy13SzpyT1whkK+oIpfmN+RQRzA60DxkTG64="\
     "ROCKET_PASSWORD=$password"\
-    "ROCKET_MAX_ENTRIES"=5000\
-    "ROCKET_ID_LENGTH"=3\
+    "ROCKET_MAX_ENTRIES"=10000\
+    "ROCKET_ID_LENGTH"=4\
     "ROCKET_DATABASE_FILE=$DB_FILE"\
     "ROCKET_PREFIX=$prefix"\
     cargo run --release&
@@ -53,6 +53,15 @@ echo "#### Check that after uploading some data with curl (X-API-Key header), we
 sample_data1="hello world"
 url="$(curl -X PUT -H "X-API-Key: $password" --data "$sample_data1" "$prefix")"
 assert_equal "$(curl -fs "$url")" "$sample_data1"
+
+echo "#### Check that we can override values given an id"
+sample_dataX="hello world 1111"
+sample_dataY="hello world 2222"
+url="$(curl -X PUT -u":$password" --data "$sample_dataX" $prefix/q)"
+assert_equal "$(curl -fs "$url")" "$sample_dataX"
+assert_equal "$url" "$prefix/q"
+curl -X POST -d "val=$sample_dataY" -d "password=$password" "$prefix/q"
+assert_equal "$(curl -fs "$url")" "$sample_dataY"
 
 echo "#### Check that after uploading some data with curl (Authorization header), we can delete it"
 url="$(curl -X PUT -u "a:$password" --data "$sample_data1" "$prefix")"
