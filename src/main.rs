@@ -18,7 +18,7 @@ mod params;
 
 use highlight::highlight;
 use io::{generate_id, get_paste, store_paste};
-use params::{HostHeader, IsPlaintextRequest};
+use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
 
@@ -29,8 +29,6 @@ use rocket::response::Redirect;
 use rocket::Data;
 use rocket::fairing::AdHoc;
 use rocket::State;
-use rocket::http::uri;
-use rocket::Rocket;
 
 use std::borrow::Cow;
 
@@ -72,7 +70,7 @@ async fn submit<'s>(state: State<'s, Password>, input: Form<IndexForm>) -> Resul
     let id = generate_id();
     let uri = uri!(show_paste: &id);
     let form_data = input.into_inner();
-    return if form_data.password != state.0 {
+    if form_data.password != state.0 {
         Err(Status::Unauthorized)
     } else {
         store_paste(id, form_data.val).await;
@@ -81,7 +79,7 @@ async fn submit<'s>(state: State<'s, Password>, input: Form<IndexForm>) -> Resul
 }
 
 #[put("/<password>", data = "<input>")]
-async fn submit_raw<'s>(input: Data, state: State<'s, Password>, password:String, host: HostHeader<'_>) -> Result<String, Status> {
+async fn submit_raw(input: Data, state: State<'_, Password>, password:String, prefix: State<'_, Prefix>) -> Result<String, Status> {
     if password != state.0 {
         return Err(Status::Unauthorized);
     }
@@ -93,13 +91,9 @@ async fn submit_raw<'s>(input: Data, state: State<'s, Password>, password:String
 
     let id = generate_id();
     let uri = uri!(show_paste: &id);
-
     store_paste(id, data).await;
 
-    match *host {
-        Some(host) => Ok(format!("https://{}{}", host, uri)),
-        None => Ok(format!("{}", uri)),
-    }
+    Ok(format!("{}/{}", prefix.0, uri))
 }
 
 ///
@@ -113,13 +107,13 @@ struct ShowPaste<'a> {
 }
 
 #[get("/<name>/qr")]
-async fn get_qr<'p>(name: String, prefix: State<'p, Prefix>) -> Result<Content<Vec<u8>>, Status> {
+async fn get_qr(name: String, prefix: State<'_, Prefix>) -> Result<Content<Vec<u8>>, Status> {
     let mut splitter = name.splitn(2, '.');
     let key = splitter.next().ok_or_else(|| Status::NotFound)?;
 
     let _entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
 
-    let result = qrcode_generator::to_png_to_vec(prefix.0.clone() + "/" + &name, QrCodeEcc::Low, 1024).unwrap();
+    let result = qrcode_generator::to_png_to_vec(format!("{}/{}", prefix.0, &name), QrCodeEcc::Low, 1024).unwrap();
     Ok(Content(ContentType::PNG, result))
 }
 
