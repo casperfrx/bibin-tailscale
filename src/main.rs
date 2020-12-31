@@ -110,7 +110,7 @@ async fn submit_raw(
     match store_paste(id_length.0, data).await {
         Ok(id) => {
             let uri = uri!(show_paste: &id);
-            Ok(format!("{}/{}", prefix.0, uri))
+            Ok(format!("{}{}", prefix.0, uri))
         }
         Err(e) => {
             println!("ERROR: {}", e);
