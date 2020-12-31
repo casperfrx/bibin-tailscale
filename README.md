@@ -25,12 +25,14 @@ You will need to provide the url prefix that will be used to generate the URL in
 ##### is there curl support?
 
 ```bash
+# Add a new paste
 $ curl -X PUT -u "anything:PASSWORD" --data 'hello world' https://bi.bin/
-# or
-$ curl -X PUT -H "X-API-Key:PASSWORD" --data 'hello world' https://bi.bin/
-https://bi.bin/cateettary
+# returns: https://bi.bin/cateettary
+# Fetch a paste
 $ curl https://bi.bin/cateettary
 hello world
+# Delete a paste
+$ curl -X DELETE -H "X-API-Key:PASSWORD" https://bi.bin/cateettary
 ```
 
 ##### What can bibin do?

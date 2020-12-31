@@ -22,7 +22,7 @@ mod highlight;
 mod io;
 mod params;
 use highlight::highlight;
-use io::{get_paste, store_paste};
+use io::{delete_paste, get_paste, store_paste};
 use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
@@ -140,6 +140,25 @@ async fn submit_raw(
     }
 }
 
+#[delete("/<id>")]
+async fn delete(
+    id: String,
+    config: State<'_, BibinConfig>,
+    password: auth::AuthKey,
+) -> Result<String, Status> {
+    if !password.is_valid(&config.password) {
+        return Err(Status::Unauthorized);
+    }
+
+    match delete_paste(id).await {
+        Ok(id) => Ok(format!("{} deleted", id)),
+        Err(e) => {
+            error!("[DELETE_PASTE] {}", e);
+            Err(Status::InternalServerError)
+        }
+    }
+}
+
 ///
 /// Show paste page
 ///
@@ -230,6 +249,9 @@ async fn show_paste(
 #[rocket::launch]
 fn rocket() -> rocket::Rocket {
     rocket::ignite()
-        .mount("/", routes![index, submit, submit_raw, show_paste, get_qr])
+        .mount(
+            "/",
+            routes![index, submit, submit_raw, show_paste, get_qr, delete],
+        )
         .attach(AdHoc::config::<BibinConfig>())
 }
