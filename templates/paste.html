@@ -9,12 +9,30 @@
         font-family: inherit;
         font-size: 1rem;
         line-height: inherit;
-        counter-reset: line;        
+        counter-reset: line;
     }
+
     code {
         counter-increment: line;
     }
-      
+
+    button {
+        position: absolute;
+        bottom: 1rem;
+        right: 1rem;
+
+        height: 3rem;
+        width: 3rem;
+        border: none;
+        border-radius: 50%;
+        background: white;
+
+        color: #2196F3;
+        font-size: 2rem;
+
+        cursor: pointer;
+    }
+
     code::before {
         content: counter(line);
         display: inline-block;
@@ -28,4 +46,19 @@
 
 {% endblock styles %}
 
-{% block content %}<pre>{{ content|safe }}</pre>{% endblock content %}
+{% block content %}
+<button>&#9166;</button>
+<pre>{{ content|safe }}</pre>
+<script>
+    const transition = {
+        "": "pre-wrap",
+        "pre-wrap": "pre",
+        "pre": "pre-wrap"
+    }
+    const pre = document.querySelector('pre');
+    const button = document.querySelector('button');
+    button.addEventListener("click", function(e) {
+        pre.style.whiteSpace = transition[pre.style.whiteSpace]
+    })
+</script>
+{% endblock content %}
