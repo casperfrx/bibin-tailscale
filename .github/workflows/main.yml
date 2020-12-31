@@ -1,0 +1,45 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the source code
+        uses: actions/checkout@master
+
+      - name: Install Rust stable
+        run: |
+          rustup toolchain update --no-self-update stable
+          rustup default nightly
+          rustup component add clippy rustfmt
+
+      - name: Run rustfmt
+        run: cargo fmt -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all --all-features -- -Dwarnings
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the source code
+        uses: actions/checkout@master
+
+      - name: Install Rust nightly
+        run: |
+          rustup toolchain update --no-self-update nightly
+          rustup default nightly
+
+      - name: Update apt cache
+        run: sudo apt-get update
+
+      - name: Build
+        run: cargo build
+
+      - name: Test
+        run: ./integration_tests.sh
