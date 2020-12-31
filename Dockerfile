@@ -1,7 +1,8 @@
 FROM rust:1-slim-stretch AS builder
 RUN rustup install stable-x86_64-unknown-linux-gnu
+RUN rustup default stable
 
-RUN apt update && apt install -y libclang-dev
+RUN apt-get update && apt-get install -y libclang-dev
 
 COPY . /sources
 WORKDIR /sources

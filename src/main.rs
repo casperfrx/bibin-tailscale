@@ -50,12 +50,17 @@ fn default_max_entries() -> i32 {
     10000
 }
 
+fn default_database_file() -> String {
+    ":memory:".to_owned()
+}
+
 #[derive(serde::Deserialize)]
 struct BibinConfig {
     password: AuthKey,
     prefix: String,
     #[serde(default = "default_id_length")]
     id_length: usize,
+    #[serde(default = "default_database_file")]
     database_file: String,
     #[serde(default = "default_database_connections")]
     database_connections: u32,

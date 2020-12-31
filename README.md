@@ -1,28 +1,43 @@
 # (bi)bin
 
-A fork of the excellent [bin](https://github.com/w4/bin). I use that project on my own website as a quick scratchpad, url shortener, QR code generator... I also added a rudimentary password protection scheme because I did not want to have to curate the content.
+A fork of the excellent [bin](https://github.com/w4/bin). It is a pastebin-like project for my own website: quick scratchpad, url shortener, QR code generator... I also added a rudimentary password protection scheme because I did not want to have to curate the content.
 
----
+It is optimized for speed and can handle hundreds of clients per second (async code with [Rocket](https://rocket.rs/)/[SQLx](https://github.com/launchbadge/sqlx)).
 
-A paste bin that's no longer minimalist. But it still has no database requirement, no commenting functionality, no self-destructing or time bomb messages and no social media integration-just an application to quickly send snippets of text to people.
+### Persistence
 
-It is written in Rust. It's fast, it's simple, there's code highlighting. It's revolutionary in the paste bin industry, disrupting markets and pushing boundaries never seen before).
+The entries are stored in a Sqlite database. The entries are stored in the file described in the `database_file` configuration key. To persistance and use an in-memory keystore, use the special file `:memory:`.
 
-##### how do you run it?
+### Configuration
 
-```bash
-$ ROCKET_PREFIX="https://bi.bin" ROCKET_PASSWORD=bibinrulez ./bibin
+(bi)bin is using [Rocket](https://rocket.rs/)'s configuration subsystem.
+At startup it will read each key from a `Rocket.toml` file, or from environment variables (`ROCKET_` prefix)
+
+```
+[default]
+password = "YOUR_PASSWORD"
+prefix = "https://YOUR.WEBSITE.net"
+secret_key = "REPLACE WITH THE OUTPUT OF openssl rand -base64 32"
 ```
 
-##### funny, what settings are there?
+Optional entries:
+```
+address = "127.0.0.1"
+port = "8000"
+id_length = 4   # Size of the unique paste ID
+max_entries = 10000   # Maximum number of paste kept in the database.
+database_connections = 10    # Number of read-only connections to the DB opened in parallel
+database_file=":memory:"    # Sqlite file on disk or ":memory:"
+```
 
-bin uses [rocket](https://rocket.rs) so the configuration is done with a [rocket config file](https://api.rocket.rs/v0.3/rocket/config/). You can set `ROCKET_PORT` in your environment if you want to change the default port (8000).
+Override values from `Rocket.toml` with environment variables:
+```
+$ ROCKET_PREFIX="https://bi.bin" ROCKET_PASSWORD=bibinrulez ROCKET_ID_LENGTH=6 ./bibin
+```
 
-An environment variable `BIN_BUFFER_SIZE` (which defaults to 2000) define how many paste are stored.
+### Curl support
 
-You will need to provide the url prefix that will be used to generate the URL in the QR codes (`PREFIX`) as well as the password (`PASSWORD`) in the rocket config file.
-
-##### is there curl support?
+(bi)bin support the `Basic` authentication scheme (`-u` with curl), as well as the `X-API-Key` header:
 
 ```bash
 # Add a new paste
@@ -35,7 +50,7 @@ hello world
 $ curl -X DELETE -H "X-API-Key:PASSWORD" https://bi.bin/cateettary
 ```
 
-##### What can bibin do?
+### What can bibin do?
 
 **Scratchpad**: Everything that you write will be stored on your browser, so you can close the window and what you typed will be there again when you come back.
 
@@ -46,4 +61,4 @@ $ curl -X DELETE -H "X-API-Key:PASSWORD" https://bi.bin/cateettary
 - `.b64` will return the content base64-encoded
 - `.qr` will return the content as a qr code
 
-**Generate a QR code for your url**: just add /qr at the end of your bibin URL: `https://bi.bin/cateettary.c/qr`
+**Generate a QR code from the url**: Add `/qr` at the end of your bibin URL: `https://bi.bin/cateettary.c/qr`

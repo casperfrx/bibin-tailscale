@@ -1,6 +1,4 @@
 [default]
 password = "YOUR_PASSWORD"
 prefix = "https://YOUR.WEBSITE.net"
-address = "127.0.0.1"
-secret_key = "REPLACE WITH THE OUTPUT OF openssl rand -base64 32"
-database_file="YOUR_SQLITE_FILE"
+secret_key = "A/i5tsUgdKBtKGmXApPaC2RYISLIyQfMMaZGECZoFOU="
