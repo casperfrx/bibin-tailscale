@@ -35,7 +35,7 @@ hello world
 
 **Scratchpad**: Everything that you write will be stored on your browser, so you can close the window and what you typed will be there again when you come back.
 
-**Syntax** highlighting: you need to add the file extension at the end of your paste URL.
+**Syntax highlighting**: you need to add the file extension at the end of your paste URL.
 
 **Special extensions**:
 - `.url` will trigger a http redirect to whatever is in the post. This works with curl requests as well!
