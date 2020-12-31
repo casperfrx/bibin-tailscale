@@ -22,22 +22,20 @@ use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
 
+use rocket::fairing::AdHoc;
 use rocket::http::{ContentType, RawStr, Status};
 use rocket::request::Form;
 use rocket::response::content::{Content, Html};
 use rocket::response::Redirect;
 use rocket::Data;
-use rocket::fairing::AdHoc;
 use rocket::State;
 
 use std::borrow::Cow;
 
 use tokio::io::AsyncReadExt;
 
-
 struct Password(String);
 struct Prefix(String);
-
 
 ///
 /// Homepage
@@ -62,11 +60,14 @@ fn index() -> Result<Html<String>, Status> {
 #[derive(FromForm, Clone)]
 struct IndexForm {
     val: String,
-    password: String
+    password: String,
 }
 
 #[post("/", data = "<input>")]
-async fn submit<'s>(state: State<'s, Password>, input: Form<IndexForm>) -> Result<Redirect, Status> {
+async fn submit<'s>(
+    state: State<'s, Password>,
+    input: Form<IndexForm>,
+) -> Result<Redirect, Status> {
     let id = generate_id();
     let uri = uri!(show_paste: &id);
     let form_data = input.into_inner();
@@ -79,14 +80,22 @@ async fn submit<'s>(state: State<'s, Password>, input: Form<IndexForm>) -> Resul
 }
 
 #[put("/<password>", data = "<input>")]
-async fn submit_raw(input: Data, state: State<'_, Password>, password:String, prefix: State<'_, Prefix>) -> Result<String, Status> {
+async fn submit_raw(
+    input: Data,
+    state: State<'_, Password>,
+    password: String,
+    prefix: State<'_, Prefix>,
+) -> Result<String, Status> {
     if password != state.0 {
         return Err(Status::Unauthorized);
     }
 
     let mut data = String::new();
-    input.open().take(1024 * 1000)
-        .read_to_string(&mut data).await
+    input
+        .open()
+        .take(1024 * 1000)
+        .read_to_string(&mut data)
+        .await
         .map_err(|_| Status::InternalServerError)?;
 
     let id = generate_id();
@@ -113,10 +122,11 @@ async fn get_qr(name: String, prefix: State<'_, Prefix>) -> Result<Content<Vec<u
 
     let _entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
 
-    let result = qrcode_generator::to_png_to_vec(format!("{}/{}", prefix.0, &name), QrCodeEcc::Low, 1024).unwrap();
+    let result =
+        qrcode_generator::to_png_to_vec(format!("{}/{}", prefix.0, &name), QrCodeEcc::Low, 1024)
+            .unwrap();
     Ok(Content(ContentType::PNG, result))
 }
-
 
 #[get("/<key>")]
 async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Content<String>, Status> {
@@ -137,7 +147,7 @@ async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Conten
             None => String::from(RawStr::from_str(entry).html_escape()),
         };
 
-        // Add <code> tags to enable line numbering with CSS 
+        // Add <code> tags to enable line numbering with CSS
         let html = format!(
             "<code>{}</code>",
             code_highlighted.replace("\n", "</code><code>")
@@ -160,24 +170,26 @@ fn main() {
 
             let rck = match rck.config().get_string("password") {
                 Err(e) => {
-                    println!("Error: {}.\nCannot read the password in the Rocket configuration", e);
+                    println!(
+                        "Error: {}.\nCannot read the password in the Rocket configuration",
+                        e
+                    );
                     error = true;
                     rck
-                },
-                Ok(v) => {
-                    rck.manage(Password(v))
                 }
+                Ok(v) => rck.manage(Password(v)),
             };
 
             let rck = match rck.config().get_string("prefix") {
                 Err(e) => {
-                    println!("Error: {}.\nCannot read the prefix in the Rocket configuration", e);
+                    println!(
+                        "Error: {}.\nCannot read the prefix in the Rocket configuration",
+                        e
+                    );
                     error = true;
                     rck
-                },
-                Ok(v) => {
-                    rck.manage(Prefix(v))
                 }
+                Ok(v) => rck.manage(Prefix(v)),
             };
 
             if error {
@@ -185,10 +197,10 @@ fn main() {
             } else {
                 Ok(rck)
             }
-        })
-        )
+        }))
         .mount("/", routes![index, submit, submit_raw, show_paste, get_qr])
-        .launch() {
-            println!("Error: {}", error);
-        }
+        .launch()
+    {
+        println!("Error: {}", error);
+    }
 }
