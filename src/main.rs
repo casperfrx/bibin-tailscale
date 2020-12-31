@@ -54,6 +54,17 @@ fn index() -> Result<Html<String>, Status> {
         .map_err(|_| Status::InternalServerError)
 }
 
+
+///
+/// This type allow us to either return a Content or a Redirect to another page
+///
+
+#[derive(Responder)]
+enum RedirectOrContent {
+    Redirect(Redirect),
+    Content(Content<String>)
+}
+
 ///
 /// Submit Paste
 ///
@@ -143,20 +154,28 @@ async fn get_qr(name: String, prefix: State<'_, Prefix>) -> Result<Content<Vec<u
 }
 
 #[get("/<key>")]
-async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Content<String>, Status> {
+async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<RedirectOrContent, Status> {
     let mut splitter = key.splitn(2, '.');
     let key = splitter.next().ok_or_else(|| Status::NotFound)?;
     let ext = splitter.next();
 
     let entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
 
+    if let Some(extension) = ext {
+        if extension == "url" {
+            return Ok(RedirectOrContent::Redirect(Redirect::to(entry.to_string())));
+        }
+    }
+
     if *plaintext {
-        Ok(Content(ContentType::Plain, entry.to_string()))
+        Ok(RedirectOrContent::Content(Content(ContentType::Plain, entry.to_string())))
     } else {
         let code_highlighted = match ext {
-            Some(extension) => match highlight(&entry, extension) {
-                Some(html) => html,
-                None => return Err(Status::NotFound),
+            Some(extension) => {
+                match highlight(&entry, extension) {
+                    Some(html) => html,
+                    None => return Err(Status::NotFound),
+                }
             },
             None => String::from(RawStr::from_str(entry).html_escape()),
         };
@@ -171,7 +190,7 @@ async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Conten
 
         let template = ShowPaste { content };
         match template.render() {
-            Ok(html) => Ok(Content(ContentType::HTML, html)),
+            Ok(html) => Ok(RedirectOrContent::Content(Content(ContentType::HTML, html))),
             Err(_) => Err(Status::InternalServerError),
         }
     }
