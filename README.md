@@ -25,7 +25,9 @@ You will need to provide the url prefix that will be used to generate the URL in
 ##### is there curl support?
 
 ```bash
-$ curl -X PUT --data 'hello world' https://bi.bin/PASSWORD
+$ curl -X PUT -u "anything:PASSWORD" --data 'hello world' https://bi.bin/
+# or
+$ curl -X PUT -H "X-API-Key:PASSWORD" --data 'hello world' https://bi.bin/
 https://bi.bin/cateettary
 $ curl https://bi.bin/cateettary
 hello world
