@@ -32,7 +32,7 @@ jobs:
 
       - name: Install Rust nightly
         run: |
-          rustup toolchain update --no-self-update nightly
+          rustup toolchain update --no-self-update stable
           rustup default nightly
 
       - name: Update apt cache
