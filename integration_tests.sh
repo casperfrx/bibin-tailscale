@@ -32,7 +32,16 @@ prefix=http://localhost:8000
 password=a69711b1-3d39-4344-b97a-ba91e2f5adca
 browser_agent="Mozilla/5.0 (X11; Linux x86_64; rv:76.0) Gecko/20100101 Firefox/76.0"
 
-env "ROCKET_PASSWORD=$password" ROCKET_LOG="normal" "ROCKET_PREFIX=$prefix" ROCKET_ENV=production cargo run&
+DB_FILE=tests.db
+rm -f "$DB_FILE"{,-shm,-wal}
+env "ROCKET_SECRET_KEY=jhqTG1chy13SzpyT1whkK+oIpfmN+RQRzA60DxkTG64="\
+    "ROCKET_PASSWORD=$password"\
+    "ROCKET_MAX_ENTRIES"=5000\
+    "ROCKET_ID_LENGTH"=3\
+    "ROCKET_DATABASE_FILE=$DB_FILE"\
+    "ROCKET_PREFIX=$prefix"\
+    cargo run --release&
+
 bibin_pid=$!
 
 while ! curl -fs "$prefix" > /dev/null; do
@@ -74,7 +83,7 @@ assert_equal "$data_after_redirect" "$sample_data2"
 
 echo "#### Check that it can handle 10'000 requests (There will be ID collisions)"
 num=0
-while test "$num" -lt 250; do
+while test "$num" -lt 2500; do
     curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
     bg_process1="$!"
 
@@ -88,6 +97,7 @@ while test "$num" -lt 250; do
     assert_equal "$(curl -fs "$url")" "$sample_data2 - $num"
     wait "$bg_process1" "$bg_process2" "$bg_process3"
     num="$(( num + 1 ))"
+    echo "*** Done round $num"
 done
 
 echo "#### Testing invalid credentials"

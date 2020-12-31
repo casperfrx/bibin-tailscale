@@ -1,7 +1,4 @@
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
 extern crate rocket;
 
 #[macro_use]
@@ -21,14 +18,13 @@ mod auth;
 mod highlight;
 mod io;
 mod params;
-use highlight::highlight;
+use highlight::Highlighter;
 use io::{delete_paste, get_paste, store_paste};
 use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
 use auth::AuthKey;
 use rocket::data::ToByteUnit;
-use rocket::fairing::AdHoc;
 use rocket::http::{ContentType, RawStr, Status};
 use rocket::request::Form;
 use rocket::response::content::{Content, Html};
@@ -38,10 +34,20 @@ use rocket::State;
 
 use std::borrow::Cow;
 
-use tokio::io::AsyncReadExt;
+use rocket::tokio::io::AsyncReadExt;
+
+use io::{ReadPool, WritePool};
 
 fn default_id_length() -> usize {
     4
+}
+
+fn default_database_connections() -> u32 {
+    10
+}
+
+fn default_max_entries() -> i32 {
+    10000
 }
 
 #[derive(serde::Deserialize)]
@@ -50,6 +56,11 @@ struct BibinConfig {
     prefix: String,
     #[serde(default = "default_id_length")]
     id_length: usize,
+    database_file: String,
+    #[serde(default = "default_database_connections")]
+    database_connections: u32,
+    #[serde(default = "default_max_entries")]
+    max_entries: i32,
 }
 
 ///
@@ -93,12 +104,13 @@ struct IndexForm {
 async fn submit<'s>(
     config: State<'s, BibinConfig>,
     input: Form<IndexForm>,
+    pool: State<'_, WritePool>,
 ) -> Result<Redirect, Status> {
     let form_data = input.into_inner();
     if !form_data.password.is_valid(&config.password) {
         Err(Status::Unauthorized)
     } else {
-        match store_paste(config.id_length, form_data.val).await {
+        match store_paste(&pool, config.id_length, config.max_entries, form_data.val).await {
             Ok(id) => {
                 let uri = uri!(show_paste: &id);
                 Ok(Redirect::to(uri))
@@ -116,6 +128,7 @@ async fn submit_raw(
     input: Data,
     config: State<'_, BibinConfig>,
     password: auth::AuthKey,
+    pool: State<'_, WritePool>,
 ) -> Result<String, Status> {
     if !password.is_valid(&config.password) {
         return Err(Status::Unauthorized);
@@ -128,7 +141,7 @@ async fn submit_raw(
         .await
         .map_err(|_| Status::InternalServerError)?;
 
-    match store_paste(config.id_length, data).await {
+    match store_paste(&pool, config.id_length, config.max_entries, data).await {
         Ok(id) => {
             let uri = uri!(show_paste: &id);
             Ok(format!("{}{}", config.prefix, uri))
@@ -145,12 +158,13 @@ async fn delete(
     id: String,
     config: State<'_, BibinConfig>,
     password: auth::AuthKey,
+    pool: State<'_, WritePool>,
 ) -> Result<String, Status> {
     if !password.is_valid(&config.password) {
         return Err(Status::Unauthorized);
     }
 
-    match delete_paste(id).await {
+    match delete_paste(&pool, id).await {
         Ok(id) => Ok(format!("{} deleted", id)),
         Err(e) => {
             error!("[DELETE_PASTE] {}", e);
@@ -170,11 +184,22 @@ struct ShowPaste<'a> {
 }
 
 #[get("/<name>/qr")]
-async fn get_qr(name: String, config: State<'_, BibinConfig>) -> Result<Content<Vec<u8>>, Status> {
+async fn get_qr(
+    name: String,
+    config: State<'_, BibinConfig>,
+    pool: State<'_, ReadPool>,
+) -> Result<Content<Vec<u8>>, Status> {
     let mut splitter = name.splitn(2, '.');
     let key = splitter.next().ok_or(Status::NotFound)?;
-
-    let _entry = &*get_paste(key).await.ok_or(Status::NotFound)?;
+    match get_paste(&pool, key).await {
+        // TODO: not found or Internal error
+        Ok(None) => return Err(Status::NotFound),
+        Err(e) => {
+            warn!("[GET_QR] Error in get_paste: {}", e);
+            return Err(Status::InternalServerError);
+        }
+        Ok(Some(_)) => (),
+    };
 
     let result = qrcode_generator::to_png_to_vec(
         format!("{}/{}", config.prefix, &name),
@@ -189,20 +214,29 @@ async fn get_qr(name: String, config: State<'_, BibinConfig>) -> Result<Content<
 async fn show_paste(
     key: String,
     plaintext: IsPlaintextRequest,
+    pool: State<'_, ReadPool>,
+    highlighter: State<'_, Highlighter>,
 ) -> Result<RedirectOrContent, Status> {
     let mut splitter = key.splitn(2, '.');
     let key = splitter.next().ok_or(Status::NotFound)?;
     let ext = splitter.next();
 
-    let entry = &*get_paste(key).await.ok_or(Status::NotFound)?;
+    let entry = match get_paste(&pool, key).await {
+        Ok(Some(data)) => data,
+        Ok(None) => return Err(Status::NotFound),
+        Err(e) => {
+            warn!("[SHOW_PASTE] get_paste error: {}", e);
+            return Err(Status::InternalServerError);
+        }
+    };
 
     if let Some(extension) = ext {
         match extension {
-            "url" => return Ok(RedirectOrContent::Redirect(Redirect::to(entry.to_string()))),
+            "url" => return Ok(RedirectOrContent::Redirect(Redirect::to(entry))),
             "qr" => match qrcode_generator::to_png_to_vec(entry, QrCodeEcc::Medium, 1024) {
                 Ok(code) => return Ok(RedirectOrContent::Binary(Content(ContentType::PNG, code))),
                 Err(e) => {
-                    warn!("ERROR: when generating qr code: {}", e);
+                    warn!("[SHOW_PASTE] qrcode_generator: {}", e);
                     return Err(Status::InternalServerError);
                 }
             },
@@ -219,15 +253,15 @@ async fn show_paste(
     if *plaintext {
         Ok(RedirectOrContent::String(Content(
             ContentType::Plain,
-            entry.to_string(),
+            entry,
         )))
     } else {
         let code_highlighted = match ext {
-            Some(extension) => match highlight(&entry, extension) {
+            Some(extension) => match highlighter.highlight(&entry, extension) {
                 Some(html) => html,
                 None => return Err(Status::NotFound),
             },
-            None => String::from(RawStr::from_str(entry).html_escape()),
+            None => String::from(RawStr::from_str(&entry).html_escape()),
         };
 
         // Add <code> tags to enable line numbering with CSS
@@ -247,11 +281,47 @@ async fn show_paste(
 }
 
 #[rocket::launch]
-fn rocket() -> rocket::Rocket {
-    rocket::ignite()
-        .mount(
-            "/",
-            routes![index, submit, submit_raw, show_paste, get_qr, delete],
-        )
-        .attach(AdHoc::config::<BibinConfig>())
+async fn rocket() -> rocket::Rocket {
+    let highlighter = Highlighter::new();
+
+    let rkt = rocket::ignite();
+
+    // I would like to use the ADHoc helpers instead, but I need to configure the database before
+    // starting rocket. I prefer to not register Pools that are in a non-working state, and then
+    // read the config and init them.
+    // With the current system the pools are either created and working or don't exist.
+    let config = match rkt.figment().extract::<BibinConfig>() {
+        Err(e) => {
+            rocket::config::pretty_print_error(e);
+            panic!("Configuration error");
+        }
+        Ok(config) => config,
+    };
+
+    let write_pool = WritePool::new(&config.database_file)
+        .await
+        .expect("Error when creating the writing pool");
+
+    write_pool
+        .init()
+        .await
+        .expect("Error during initialization");
+
+    let read_pool = ReadPool::new(&config.database_file, config.database_connections)
+        .await
+        .expect("Error when creating the reading pool");
+
+    // 16 is the ID field size in the db
+    if config.id_length > 16 {
+        panic!("The maximum ID size is 16");
+    }
+
+    rkt.mount(
+        "/",
+        routes![index, submit, submit_raw, show_paste, get_qr, delete],
+    )
+    .manage(config)
+    .manage(highlighter)
+    .manage(read_pool)
+    .manage(write_pool)
 }
