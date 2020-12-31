@@ -6,6 +6,10 @@ extern crate lazy_static;
 #[macro_use]
 extern crate rocket;
 
+extern crate qrcode_generator;
+
+use qrcode_generator::QrCodeEcc;
+
 extern crate askama;
 
 mod highlight;
@@ -25,6 +29,8 @@ use rocket::response::Redirect;
 use rocket::Data;
 use rocket::fairing::AdHoc;
 use rocket::State;
+use rocket::http::uri;
+use rocket::Rocket;
 
 use std::borrow::Cow;
 
@@ -32,6 +38,7 @@ use tokio::io::AsyncReadExt;
 
 
 struct Password(String);
+struct Prefix(String);
 
 
 ///
@@ -105,6 +112,18 @@ struct ShowPaste<'a> {
     content: MarkupDisplay<AskamaHtml, Cow<'a, String>>,
 }
 
+#[get("/<name>/qr")]
+async fn get_qr<'p>(name: String, prefix: State<'p, Prefix>) -> Result<Content<Vec<u8>>, Status> {
+    let mut splitter = name.splitn(2, '.');
+    let key = splitter.next().ok_or_else(|| Status::NotFound)?;
+
+    let _entry = &*get_paste(key).await.ok_or_else(|| Status::NotFound)?;
+
+    let result = qrcode_generator::to_png_to_vec(prefix.0.clone() + "/" + &name, QrCodeEcc::Low, 1024).unwrap();
+    Ok(Content(ContentType::PNG, result))
+}
+
+
 #[get("/<key>")]
 async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Content<String>, Status> {
     let mut splitter = key.splitn(2, '.');
@@ -140,25 +159,41 @@ async fn show_paste(key: String, plaintext: IsPlaintextRequest) -> Result<Conten
     }
 }
 
-
 fn main() {
     if let Err(error) = rocket::ignite()
-        .attach(AdHoc::on_attach("Password Config", |rck| {
-            println!("Adding password from config...");
-            let password = rck.config()
-                .get_string("password");
-            match password {
-                Err(e) =>  {
-                    println!("Error: {}.\nCannot read a password in the Rocket configuration", e);
-                    Err(rck)
+        .attach(AdHoc::on_attach("Reading Config", |rck| {
+            let mut error = false;
+
+            let rck = match rck.config().get_string("password") {
+                Err(e) => {
+                    println!("Error: {}.\nCannot read the password in the Rocket configuration", e);
+                    error = true;
+                    rck
+                },
+                Ok(v) => {
+                    rck.manage(Password(v))
                 }
-                Ok(password) => {
-                    Ok(rck.manage(Password(password)))
+            };
+
+            let rck = match rck.config().get_string("prefix") {
+                Err(e) => {
+                    println!("Error: {}.\nCannot read the prefix in the Rocket configuration", e);
+                    error = true;
+                    rck
+                },
+                Ok(v) => {
+                    rck.manage(Prefix(v))
                 }
+            };
+
+            if error {
+                Err(rck)
+            } else {
+                Ok(rck)
             }
         })
         )
-        .mount("/", routes![index, submit, submit_raw, show_paste])
+        .mount("/", routes![index, submit, submit_raw, show_paste, get_qr])
         .launch() {
             println!("Error: {}", error);
         }

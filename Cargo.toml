@@ -8,6 +8,7 @@ authors = ["Jordan Doyle <jordan@doyle.la>"]
 edition = "2018"
 
 [dependencies]
+qrcode-generator = "1.0"
 owning_ref = "0.4"
 linked-hash-map = "0.5"
 rocket = { git = "https://github.com/SergioBenitez/Rocket", branch = "async" }
