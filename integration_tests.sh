@@ -106,7 +106,7 @@ while test "$num" -lt 2500; do
     assert_equal "$(curl -fs "$url")" "$sample_data2 - $num"
     wait "$bg_process1" "$bg_process2" "$bg_process3"
     num="$(( num + 1 ))"
-    echo "*** Done round $num"
+    echo "*** $(date +'%T') Done round $num"
 done
 
 echo "#### Testing invalid credentials"
