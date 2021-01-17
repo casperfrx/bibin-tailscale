@@ -14,6 +14,8 @@ extern crate askama;
 
 extern crate serde;
 
+extern crate tokio_compat_02;
+
 mod auth;
 mod highlight;
 mod io;
@@ -32,9 +34,11 @@ use rocket::response::Redirect;
 use rocket::Data;
 use rocket::State;
 
-use std::borrow::Cow;
-
 use rocket::tokio::io::AsyncReadExt;
+
+use tokio_compat_02::FutureExt;
+
+use std::borrow::Cow;
 
 use io::{ReadPool, WritePool};
 
@@ -299,15 +303,18 @@ async fn rocket() -> rocket::Rocket {
     };
 
     let write_pool = WritePool::new(&config.database_file)
+        .compat()
         .await
         .expect("Error when creating the writing pool");
 
     write_pool
         .init()
+        .compat()
         .await
         .expect("Error during initialization");
 
     let read_pool = ReadPool::new(&config.database_file, config.database_connections)
+        .compat()
         .await
         .expect("Error when creating the reading pool");
 
