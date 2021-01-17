@@ -1,6 +1,4 @@
 extern crate gpw;
-extern crate linked_hash_map;
-extern crate owning_ref;
 extern crate rand;
 
 use rand::{thread_rng, Rng};

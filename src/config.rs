@@ -13,7 +13,7 @@ fn default_max_entries() -> i32 {
 }
 
 fn default_database_file() -> String {
-    ":memory:".to_owned()
+    "bibin.sqlite".to_owned()
 }
 
 #[derive(serde::Deserialize)]
