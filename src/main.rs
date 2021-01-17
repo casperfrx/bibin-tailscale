@@ -97,7 +97,7 @@ async fn submit(
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
-                error!("[SUBMIT] {}", e);
+                error!("[SUBMIT] {} (pool {:?})", e, pool.0);
                 Err(Status::InternalServerError)
             }
         }
@@ -121,7 +121,7 @@ async fn submit_with_key(
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
-                error!("[SUBMIT] {}", e);
+                error!("[SUBMIT_WITH_KEY] {} (pool {:?})", e, pool.0);
                 Err(Status::InternalServerError)
             }
         }
@@ -152,7 +152,7 @@ async fn submit_raw(
             Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {
-            error!("[SUBMIT_RAW] {}", e);
+            error!("[SUBMIT_RAW] {} (pool {:?})", e, pool.0);
             Err(Status::InternalServerError)
         }
     }
@@ -183,7 +183,7 @@ async fn submit_raw_with_key(
             Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {
-            error!("[SUBMIT_RAW] {}", e);
+            error!("[SUBMIT_RAW_WITH_KEY] {} (pool {:?})", e, pool.0);
             Err(Status::InternalServerError)
         }
     }

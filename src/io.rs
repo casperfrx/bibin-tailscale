@@ -6,7 +6,6 @@ use rand::{thread_rng, Rng};
 use std::cell::RefCell;
 use std::time::Duration;
 
-use sqlx::Done;
 use sqlx::Row;
 use std::fmt::Display;
 
@@ -15,7 +14,7 @@ use sqlx::Executor;
 
 use tokio_compat_02::FutureExt;
 
-pub struct WritePool(SqlitePool);
+pub struct WritePool(pub SqlitePool);
 
 impl WritePool {
     pub async fn new(file_name: &str) -> Result<WritePool, IOError> {
@@ -195,6 +194,7 @@ pub async fn store_paste_given_id(
         .bind(&id)
         .bind(&content)
         .execute(&mut cnx)
+        .compat()
         .await?;
 
     return Ok(id);
