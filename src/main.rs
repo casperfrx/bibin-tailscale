@@ -110,8 +110,8 @@ struct IndexForm {
 }
 
 #[post("/", data = "<input>")]
-async fn submit<'s>(
-    config: State<'s, BibinConfig>,
+async fn submit(
+    config: State<'_, BibinConfig>,
     input: Form<IndexForm>,
     pool: State<'_, WritePool>,
 ) -> Result<Redirect, Status> {
@@ -133,8 +133,8 @@ async fn submit<'s>(
 }
 
 #[post("/<key>", data = "<input>")]
-async fn submit_with_key<'s>(
-    config: State<'s, BibinConfig>,
+async fn submit_with_key(
+    config: State<'_, BibinConfig>,
     input: Form<IndexForm>,
     pool: State<'_, WritePool>,
     key: String,
