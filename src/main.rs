@@ -17,11 +17,14 @@ extern crate serde;
 extern crate tokio_compat_02;
 
 mod auth;
+mod config;
 mod highlight;
 mod io;
 mod params;
 use highlight::Highlighter;
 use io::{delete_paste, get_paste, store_paste, store_paste_given_id};
+
+use config::BibinConfig;
 use params::IsPlaintextRequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
@@ -41,36 +44,6 @@ use tokio_compat_02::FutureExt;
 use std::borrow::Cow;
 
 use io::{ReadPool, WritePool};
-
-fn default_id_length() -> usize {
-    4
-}
-
-fn default_database_connections() -> u32 {
-    10
-}
-
-fn default_max_entries() -> i32 {
-    10000
-}
-
-fn default_database_file() -> String {
-    ":memory:".to_owned()
-}
-
-#[derive(serde::Deserialize)]
-struct BibinConfig {
-    password: AuthKey,
-    prefix: String,
-    #[serde(default = "default_id_length")]
-    id_length: usize,
-    #[serde(default = "default_database_file")]
-    database_file: String,
-    #[serde(default = "default_database_connections")]
-    database_connections: u32,
-    #[serde(default = "default_max_entries")]
-    max_entries: i32,
-}
 
 ///
 /// Homepage
