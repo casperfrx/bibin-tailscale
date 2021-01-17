@@ -13,7 +13,7 @@ owning_ref = "0.4"
 linked-hash-map = "0.5"
 rocket = { git = "https://github.com/SergioBenitez/Rocket" }
 askama = "0.10.5"
-rand = "0.7"
+rand = "0.8.2"
 gpw = "0.1"
 syntect = "4.4.0"
 async-trait = "0.1"
