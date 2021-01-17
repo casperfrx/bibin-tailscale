@@ -33,11 +33,5 @@ jobs:
         run: |
           rustup toolchain update --no-self-update stable
 
-      - name: Update apt cache
-        run: sudo apt-get update
-
-      - name: Build
-        run: cargo build
-
       - name: Test
         run: ./integration_tests.sh
