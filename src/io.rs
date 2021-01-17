@@ -6,6 +6,7 @@ extern crate rand;
 use rand::{thread_rng, Rng};
 
 use std::cell::RefCell;
+use std::time::Duration;
 
 use sqlx::Done;
 use sqlx::Row;
@@ -23,6 +24,7 @@ impl WritePool {
         Ok(WritePool(
             sqlx::pool::PoolOptions::<sqlx::Sqlite>::new()
                 .max_connections(1)
+                .connect_timeout(Duration::from_secs(60))
                 .connect_with(
                     SqliteConnectOptions::new()
                         .filename(file_name)
