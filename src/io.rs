@@ -75,7 +75,7 @@ fn generate_id(length: usize) -> String {
 
     (0..length)
         .map(|_| {
-            let idx = thread_rng().gen_range(0, CHARSET.len());
+            let idx = thread_rng().gen_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect::<String>()
