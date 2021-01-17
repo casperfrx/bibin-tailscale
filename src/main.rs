@@ -20,15 +20,14 @@ mod auth;
 mod config;
 mod highlight;
 mod io;
-mod params;
-use highlight::Highlighter;
-use io::{delete_paste, get_paste, store_paste, store_paste_given_id};
-
-use config::BibinConfig;
-use params::IsPlaintextRequest;
+mod isplaintextrequest;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
 use auth::AuthKey;
+use config::BibinConfig;
+use highlight::Highlighter;
+use io::{delete_paste, get_paste, store_paste, store_paste_given_id};
+use isplaintextrequest::IsPlaintextRequest;
 use rocket::data::ToByteUnit;
 use rocket::http::{ContentType, RawStr, Status};
 use rocket::request::Form;
