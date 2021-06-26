@@ -114,7 +114,7 @@ pub async fn delete_paste(pool: &WritePool, id: String) -> Result<String, IOErro
     if result.rows_affected() == 0 {
         return Err(IOError("Not found".to_owned()));
     }
-    return Ok(id);
+    Ok(id)
 }
 
 /// Stores a paste under a new id
@@ -179,7 +179,7 @@ pub async fn store_paste(
         .compat()
         .await?;
 
-    return Ok(id);
+    Ok(id)
 }
 
 /// Stores a paste under a new id
@@ -197,7 +197,7 @@ pub async fn store_paste_given_id(
         .compat()
         .await?;
 
-    return Ok(id);
+    Ok(id)
 }
 
 /// Get a paste by id.

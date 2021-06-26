@@ -1,8 +1,8 @@
+use rocket::form;
 use rocket::http::Status;
 use rocket::outcome::Outcome;
 use rocket::request::{self, FromRequest, Request};
 use serde::Deserialize;
-use rocket::form;
 
 #[derive(Clone, Deserialize)]
 #[serde(transparent)]

@@ -29,14 +29,14 @@ use highlight::Highlighter;
 use io::{delete_paste, get_paste, store_paste, store_paste_given_id};
 use isplaintextrequest::IsPlaintextRequest;
 use rocket::data::ToByteUnit;
-use rocket::http::{ContentType, RawStr, Status};
 use rocket::form::Form;
+use rocket::http::{ContentType, RawStr, Status};
 use rocket::response::content::{Custom, Html};
 use rocket::response::Redirect;
+use rocket::tokio::io::AsyncReadExt;
+use rocket::uri;
 use rocket::Data;
 use rocket::State;
-use rocket::uri;
-use rocket::tokio::io::AsyncReadExt;
 
 use tokio_compat_02::FutureExt;
 
@@ -287,10 +287,7 @@ async fn show_paste(
     }
 
     if *plaintext {
-        Ok(RedirectOrContent::String(Custom(
-            ContentType::Plain,
-            entry,
-        )))
+        Ok(RedirectOrContent::String(Custom(ContentType::Plain, entry)))
     } else {
         let code_highlighted = match ext {
             Some(extension) => match highlighter.highlight(&entry, extension) {
