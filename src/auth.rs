@@ -1,20 +1,16 @@
-use rocket::http::RawStr;
 use rocket::http::Status;
 use rocket::outcome::Outcome;
 use rocket::request::{self, FromRequest, Request};
 use serde::Deserialize;
+use rocket::form;
 
 #[derive(Clone, Deserialize)]
 #[serde(transparent)]
 pub struct AuthKey(String);
 
-impl<'v> rocket::request::FromFormValue<'v> for AuthKey {
-    type Error = &'v RawStr;
-    fn from_form_value(value: &'v RawStr) -> Result<AuthKey, &'v RawStr> {
-        match value.parse::<String>() {
-            Ok(value) => Ok(AuthKey(value)),
-            _ => Err(value),
-        }
+impl<'v> rocket::form::FromFormField<'v> for AuthKey {
+    fn from_value(value: form::ValueField) -> form::Result<'v, Self> {
+        Ok(AuthKey(String::from(value.value)))
     }
 }
 
@@ -80,10 +76,10 @@ fn auth_from_auth_header(request: &'_ Request<'_>) -> Result<Option<AuthKey>, Au
 }
 
 #[rocket::async_trait]
-impl<'a, 'r> FromRequest<'a, 'r> for AuthKey {
+impl<'a> FromRequest<'a> for AuthKey {
     type Error = AuthError;
 
-    async fn from_request(request: &'a Request<'r>) -> request::Outcome<Self, Self::Error> {
+    async fn from_request(request: &'a Request<'_>) -> request::Outcome<Self, Self::Error> {
         match auth_from_api_header(request) {
             Ok(Some(x)) => return Outcome::Success(x),
             Err(x) => return Outcome::Failure((Status::Unauthorized, x)),

@@ -20,10 +20,10 @@ impl Deref for IsPlaintextRequest {
 }
 
 #[async_trait]
-impl<'a, 'r> FromRequest<'a, 'r> for IsPlaintextRequest {
+impl<'a> FromRequest<'a> for IsPlaintextRequest {
     type Error = ();
 
-    async fn from_request(request: &'a Request<'r>) -> Outcome<IsPlaintextRequest, ()> {
+    async fn from_request(request: &'a Request<'_>) -> Outcome<IsPlaintextRequest, ()> {
         if let Some(format) = request.format() {
             if format.is_plain() {
                 return Outcome::Success(IsPlaintextRequest(true));

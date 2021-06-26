@@ -30,12 +30,12 @@ use io::{delete_paste, get_paste, store_paste, store_paste_given_id};
 use isplaintextrequest::IsPlaintextRequest;
 use rocket::data::ToByteUnit;
 use rocket::http::{ContentType, RawStr, Status};
-use rocket::request::Form;
-use rocket::response::content::{Content, Html};
+use rocket::form::Form;
+use rocket::response::content::{Custom, Html};
 use rocket::response::Redirect;
 use rocket::Data;
 use rocket::State;
-
+use rocket::uri;
 use rocket::tokio::io::AsyncReadExt;
 
 use tokio_compat_02::FutureExt;
@@ -67,8 +67,8 @@ fn index() -> Result<Html<String>, Status> {
 #[derive(Responder)]
 enum RedirectOrContent {
     Redirect(Redirect),
-    String(Content<String>),
-    Binary(Content<Vec<u8>>),
+    String(Custom<String>),
+    Binary(Custom<Vec<u8>>),
 }
 
 ///
@@ -83,9 +83,9 @@ struct IndexForm {
 
 #[post("/", data = "<input>")]
 async fn submit(
-    config: State<'_, BibinConfig>,
+    config: &State<BibinConfig>,
     input: Form<IndexForm>,
-    pool: State<'_, WritePool>,
+    pool: &State<WritePool>,
 ) -> Result<Redirect, Status> {
     let form_data = input.into_inner();
     if !form_data.password.is_valid(&config.password) {
@@ -93,7 +93,7 @@ async fn submit(
     } else {
         match store_paste(&pool, config.id_length, config.max_entries, form_data.val).await {
             Ok(id) => {
-                let uri = uri!(show_paste: &id);
+                let uri = uri!(show_paste(id));
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
@@ -106,9 +106,9 @@ async fn submit(
 
 #[post("/<key>", data = "<input>")]
 async fn submit_with_key(
-    config: State<'_, BibinConfig>,
+    config: &State<BibinConfig>,
     input: Form<IndexForm>,
-    pool: State<'_, WritePool>,
+    pool: &State<WritePool>,
     key: String,
 ) -> Result<Redirect, Status> {
     let form_data = input.into_inner();
@@ -117,7 +117,7 @@ async fn submit_with_key(
     } else {
         match store_paste_given_id(&pool, key, form_data.val).await {
             Ok(id) => {
-                let uri = uri!(show_paste: &id);
+                let uri = uri!(show_paste(id));
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
@@ -130,10 +130,10 @@ async fn submit_with_key(
 
 #[put("/", data = "<input>")]
 async fn submit_raw(
-    input: Data,
-    config: State<'_, BibinConfig>,
+    input: Data<'_>,
+    config: &State<BibinConfig>,
     password: auth::AuthKey,
-    pool: State<'_, WritePool>,
+    pool: &State<WritePool>,
 ) -> Result<String, Status> {
     if !password.is_valid(&config.password) {
         return Err(Status::Unauthorized);
@@ -148,7 +148,7 @@ async fn submit_raw(
 
     match store_paste(&pool, config.id_length, config.max_entries, data).await {
         Ok(id) => {
-            let uri = uri!(show_paste: &id);
+            let uri = uri!(show_paste(id));
             Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {
@@ -160,10 +160,10 @@ async fn submit_raw(
 
 #[put("/<key>", data = "<input>")]
 async fn submit_raw_with_key(
-    input: Data,
-    config: State<'_, BibinConfig>,
+    input: Data<'_>,
+    config: &State<BibinConfig>,
     password: auth::AuthKey,
-    pool: State<'_, WritePool>,
+    pool: &State<WritePool>,
     key: String,
 ) -> Result<String, Status> {
     if !password.is_valid(&config.password) {
@@ -179,7 +179,7 @@ async fn submit_raw_with_key(
 
     match store_paste_given_id(&pool, key, data).await {
         Ok(id) => {
-            let uri = uri!(show_paste: &id);
+            let uri = uri!(show_paste(id));
             Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {
@@ -192,9 +192,9 @@ async fn submit_raw_with_key(
 #[delete("/<id>")]
 async fn delete(
     id: String,
-    config: State<'_, BibinConfig>,
+    config: &State<BibinConfig>,
     password: auth::AuthKey,
-    pool: State<'_, WritePool>,
+    pool: &State<WritePool>,
 ) -> Result<String, Status> {
     if !password.is_valid(&config.password) {
         return Err(Status::Unauthorized);
@@ -222,9 +222,9 @@ struct ShowPaste<'a> {
 #[get("/<name>/qr")]
 async fn get_qr(
     name: String,
-    config: State<'_, BibinConfig>,
-    pool: State<'_, ReadPool>,
-) -> Result<Content<Vec<u8>>, Status> {
+    config: &State<BibinConfig>,
+    pool: &State<ReadPool>,
+) -> Result<Custom<Vec<u8>>, Status> {
     let mut splitter = name.splitn(2, '.');
     let key = splitter.next().ok_or(Status::NotFound)?;
     match get_paste(&pool, key).await {
@@ -243,15 +243,15 @@ async fn get_qr(
         1024,
     )
     .unwrap();
-    Ok(Content(ContentType::PNG, result))
+    Ok(Custom(ContentType::PNG, result))
 }
 
 #[get("/<key>")]
 async fn show_paste(
     key: String,
     plaintext: IsPlaintextRequest,
-    pool: State<'_, ReadPool>,
-    highlighter: State<'_, Highlighter>,
+    pool: &State<ReadPool>,
+    highlighter: &State<Highlighter>,
 ) -> Result<RedirectOrContent, Status> {
     let mut splitter = key.splitn(2, '.');
     let key = splitter.next().ok_or(Status::NotFound)?;
@@ -270,14 +270,14 @@ async fn show_paste(
         match extension {
             "url" => return Ok(RedirectOrContent::Redirect(Redirect::to(entry))),
             "qr" => match qrcode_generator::to_png_to_vec(entry, QrCodeEcc::Medium, 1024) {
-                Ok(code) => return Ok(RedirectOrContent::Binary(Content(ContentType::PNG, code))),
+                Ok(code) => return Ok(RedirectOrContent::Binary(Custom(ContentType::PNG, code))),
                 Err(e) => {
                     warn!("[SHOW_PASTE] qrcode_generator: {}", e);
                     return Err(Status::InternalServerError);
                 }
             },
             "b64" => {
-                return Ok(RedirectOrContent::String(Content(
+                return Ok(RedirectOrContent::String(Custom(
                     ContentType::Plain,
                     base64::encode(entry),
                 )))
@@ -287,7 +287,7 @@ async fn show_paste(
     }
 
     if *plaintext {
-        Ok(RedirectOrContent::String(Content(
+        Ok(RedirectOrContent::String(Custom(
             ContentType::Plain,
             entry,
         )))
@@ -297,7 +297,7 @@ async fn show_paste(
                 Some(html) => html,
                 None => return Err(Status::NotFound),
             },
-            None => String::from(RawStr::from_str(&entry).html_escape()),
+            None => String::from(RawStr::new(&entry).html_escape()),
         };
 
         // Add <code> tags to enable line numbering with CSS
@@ -310,17 +310,17 @@ async fn show_paste(
 
         let template = ShowPaste { content };
         match template.render() {
-            Ok(html) => Ok(RedirectOrContent::String(Content(ContentType::HTML, html))),
+            Ok(html) => Ok(RedirectOrContent::String(Custom(ContentType::HTML, html))),
             Err(_) => Err(Status::InternalServerError),
         }
     }
 }
 
 #[rocket::launch]
-async fn rocket() -> rocket::Rocket {
+async fn rocket() -> rocket::Rocket<rocket::Build> {
     let highlighter = Highlighter::new();
 
-    let rkt = rocket::ignite();
+    let rkt = rocket::Rocket::build();
 
     // I would like to use the ADHoc helpers instead, but I need to configure the database before
     // starting rocket. I prefer to not register Pools that are in a non-working state, and then
