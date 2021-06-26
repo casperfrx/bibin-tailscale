@@ -12,8 +12,6 @@ use std::fmt::Display;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool};
 use sqlx::Executor;
 
-use tokio_compat_02::FutureExt;
-
 pub struct WritePool(pub SqlitePool);
 
 impl WritePool {
@@ -28,13 +26,12 @@ impl WritePool {
                         .create_if_missing(true)
                         .read_only(false),
                 )
-                .compat()
                 .await?,
         ))
     }
 
     pub async fn init(&self) -> Result<(), IOError> {
-        let mut cnx = self.0.acquire().compat().await?;
+        let mut cnx = self.0.acquire().await?;
         cnx.execute(
             "CREATE TABLE IF NOT EXISTS entries (
             internal_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,11 +39,9 @@ impl WritePool {
             data TEXT NOT NULL
         )",
         )
-        .compat()
         .await?;
 
         cnx.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_id ON entries(id)")
-            .compat()
             .await?;
 
         Ok(())
@@ -65,7 +60,6 @@ impl ReadPool {
                         .filename(file_name)
                         .read_only(true),
                 )
-                .compat()
                 .await?,
         ))
     }
@@ -97,7 +91,6 @@ pub async fn remove_old(
     )
     .bind(max_entries)
     .execute(cnx)
-    .compat()
     .await?;
 
     Ok(result.rows_affected())
@@ -108,7 +101,6 @@ pub async fn delete_paste(pool: &WritePool, id: String) -> Result<String, IOErro
     let result = sqlx::query("DELETE FROM entries WHERE id = ?")
         .bind(&id)
         .execute(&pool.0)
-        .compat()
         .await?;
 
     if result.rows_affected() == 0 {
@@ -125,14 +117,13 @@ pub async fn store_paste(
     content: String,
 ) -> Result<String, IOError> {
     // If we acquire the connection, nobody else can get it
-    let mut cnx = pool.0.acquire().compat().await?;
+    let mut cnx = pool.0.acquire().await?;
 
     let id = generate_id(id_length);
     let result = sqlx::query("INSERT OR IGNORE INTO entries (id, data) VALUES (?, ?)")
         .bind(&id)
         .bind(&content)
         .execute(&mut cnx)
-        .compat()
         .await?;
 
     if result.rows_affected() == 1 {
@@ -141,7 +132,6 @@ pub async fn store_paste(
 
     let entries = sqlx::query("select count(*) from entries")
         .fetch_one(&mut cnx)
-        .compat()
         .await?
         .get::<i32, usize>(0);
 
@@ -149,7 +139,7 @@ pub async fn store_paste(
         "ID Collision ({} entries), cleaning up old entries and retrying",
         entries
     );
-    let nb_entries_removed = remove_old(&mut cnx, max_entries).compat().await?;
+    let nb_entries_removed = remove_old(&mut cnx, max_entries).await?;
     warn!("Removed {} entries", nb_entries_removed);
 
     let mut retries = 0;
@@ -161,7 +151,6 @@ pub async fn store_paste(
             .bind(&id)
             .bind(&content)
             .execute(&mut cnx)
-            .compat()
             .await?;
 
         if result.rows_affected() == 1 {
@@ -176,7 +165,6 @@ pub async fn store_paste(
         .bind(&generate_id(id_length))
         .bind(&content)
         .execute(&mut cnx)
-        .compat()
         .await?;
 
     Ok(id)
@@ -194,7 +182,6 @@ pub async fn store_paste_given_id(
         .bind(&id)
         .bind(&content)
         .execute(&mut cnx)
-        .compat()
         .await?;
 
     Ok(id)
@@ -208,7 +195,6 @@ pub async fn get_paste(pool: &ReadPool, id: &str) -> Result<Option<String>, IOEr
     let result = sqlx::query("SELECT data FROM entries WHERE id = ?")
         .bind(id)
         .fetch_one(&pool.0)
-        .compat()
         .await;
 
     match result {
