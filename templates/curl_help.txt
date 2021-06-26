@@ -1,0 +1,22 @@
+Hello and Welcome to the Curl interface
+
+To add / delete / update a paste you will need to provide the password. Bibin support both
+Basic authentication (any username but with the right password) and the X-API-Key token.
+
+
+# Add a new paste
+$ curl -X PUT -u "anything:YOUR_PASSWORD" --data 'hello world' {{root_url}}
+# returns: {{root_url}}/cateettary
+
+# Fetch a paste
+$ curl {{root_url}}/cateettary
+hello world
+
+# Delete a paste
+$ curl -X DELETE -H "X-API-Key:YOUR_PASSWORD" {{root_url}}/cateettary
+
+# Upload a new paste with the id manualid. Would override any existing paste there.
+$ curl -X PUT -u "anything:YOUR_PASSWORD" --data 'hello world' {{root_url}}/manualid
+
+# Upload file.txt with the id manualid. Would override any existing paste there.
+curl -X PUT -u ":YOUR_PASSWORD" --data @file.txt  http://localhost:8000/manualid

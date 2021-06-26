@@ -29,7 +29,7 @@ use isplaintextrequest::IsPlaintextRequest;
 use rocket::data::ToByteUnit;
 use rocket::form::Form;
 use rocket::http::{ContentType, RawStr, Status};
-use rocket::response::content::{Custom, Html};
+use rocket::response::content::Custom;
 use rocket::response::Redirect;
 use rocket::tokio::io::AsyncReadExt;
 use rocket::uri;
@@ -48,12 +48,30 @@ use io::{ReadPool, WritePool};
 #[template(path = "index.html")]
 struct Index;
 
+#[derive(Template)]
+#[template(path = "curl_help.txt")]
+struct CurlIndex {
+    root_url: String,
+}
+
 #[get("/")]
-fn index() -> Result<Html<String>, Status> {
-    Index
+fn index(
+    config: &State<BibinConfig>,
+    plaintext: IsPlaintextRequest,
+) -> Result<Custom<String>, Status> {
+    if plaintext.0 {
+        CurlIndex {
+            root_url: config.prefix.clone(),
+        }
         .render()
-        .map(Html)
+        .map(|x| Custom(ContentType::Plain, x))
         .map_err(|_| Status::InternalServerError)
+    } else {
+        Index
+            .render()
+            .map(|x| Custom(ContentType::HTML, x))
+            .map_err(|_| Status::InternalServerError)
+    }
 }
 
 ///

@@ -37,19 +37,31 @@ $ ROCKET_PREFIX="https://bi.bin" ROCKET_PASSWORD=bibinrulez ROCKET_ID_LENGTH=6 .
 
 ### Curl support
 
-(bi)bin support the `Basic` authentication scheme (`-u` with curl), as well as the `X-API-Key` header:
+You can access the help by calling `/` with curl/wget/HTTPie:
+
 
 ```bash
+$ curl https://YOUR.WEBSITE.net/
+
+Hello and Welcome to the Curl interface
+
+To add / delete / update a paste you will need to provide the password. Bibin support both
+Basic authentication (any username but with the right password) and the X-API-Key token.
+
+
 # Add a new paste
-$ curl -X PUT -u "anything:PASSWORD" --data 'hello world' https://bi.bin/
-# returns: https://bi.bin/cateettary
+$ curl -X PUT -u "anything:YOUR_PASSWORD" --data 'hello world' https://YOUR.WEBSITE.net
+# returns: https://YOUR.WEBSITE.net/cateettary
+
 # Fetch a paste
-$ curl https://bi.bin/cateettary
+$ curl https://YOUR.WEBSITE.net/cateettary
 hello world
+
 # Delete a paste
-$ curl -X DELETE -H "X-API-Key:PASSWORD" https://bi.bin/cateettary
+$ curl -X DELETE -H "X-API-Key:YOUR_PASSWORD" https://YOUR.WEBSITE.net/cateettary
+
 # Upload a new paste at a given id. Would override any existing paste there.
-$ curl -X PUT -u "anything:PASSWORD" --data 'hello world' https://bi.bin/manualid
+$ curl -X PUT -u "anything:YOUR_PASSWORD" --data 'hello world' https://YOUR.WEBSITE.net/manualid
 ```
 
 ### What can bibin do?
