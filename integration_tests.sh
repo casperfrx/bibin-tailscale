@@ -27,6 +27,7 @@ function assert_equal {
 
 trap error_script ERR
 trap exit_script EXIT
+type=${1-full}
 
 prefix=http://localhost:8000
 password=a69711b1-3d39-4344-b97a-ba91e2f5adca
@@ -90,30 +91,32 @@ data_after_redirect="$(curl -L -fs \
 assert_equal "$data_after_redirect" "$sample_data2"
 
 
-echo "#### Check that it can handle 10'000 requests (There will be ID collisions)"
-num=0
-while test "$num" -lt 2500; do
-    curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
-    bg_process1="$!"
+if [[ $type == full ]]; then
+    echo "#### Check that it can handle 10'000 requests (There will be ID collisions)"
+    num=0
+    while test "$num" -lt 2500; do
+        curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
+        bg_process1="$!"
 
-    curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
-    bg_process2="$!"
+        curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
+        bg_process2="$!"
 
-    curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
-    bg_process3="$!"
+        curl -L -fs -d password="$password" -d val="$sample_data1 - $num" "$prefix" > /dev/null&
+        bg_process3="$!"
 
-    url="$(curl -fs -X PUT -H "X-API-Key: $password" --data "$sample_data2 - $num" "$prefix")"
-    assert_equal "$(curl -fs "$url")" "$sample_data2 - $num"
-    wait "$bg_process1" "$bg_process2" "$bg_process3"
-    num="$(( num + 1 ))"
-    echo "*** $(date +'%T') Done round $num"
-done
+        url="$(curl -fs -X PUT -H "X-API-Key: $password" --data "$sample_data2 - $num" "$prefix")"
+        assert_equal "$(curl -fs "$url")" "$sample_data2 - $num"
+        wait "$bg_process1" "$bg_process2" "$bg_process3"
+        num="$(( num + 1 ))"
+        echo "*** $(date +'%T') Done round $num"
+    done
+fi
 
 echo "#### Testing invalid credentials"
-if curl -fs -X PUT -H "X-API-Key: dummy" --data "$sample_data2 - $num" "$prefix"; then false; fi
-if curl -fs -X PUT -H "X-API-Key" --data "$sample_data2 - $num" "$prefix"; then false; fi
-if curl -fs -X PUT -H "Authorization: basic ffffffff" --data "$sample_data2 - $num" "$prefix"; then false; fi
-if curl -fs -X PUT -u "b:" --data "$sample_data2 - $num" "$prefix"; then false; fi
-if curl -fs -X PUT -H "X-API-Key: $password\0" --data "$sample_data2 - $num" "$prefix"; then false; fi
+if curl -fs -X PUT -H "X-API-Key: dummy" --data "$sample_data2" "$prefix"; then false; fi
+if curl -fs -X PUT -H "X-API-Key" --data "$sample_data2" "$prefix"; then false; fi
+if curl -fs -X PUT -H "Authorization: basic ffffffff" --data "$sample_data2" "$prefix"; then false; fi
+if curl -fs -X PUT -u "b:" --data "$sample_data2" "$prefix"; then false; fi
+if curl -fs -X PUT -H "X-API-Key: $password\0" --data "$sample_data2" "$prefix"; then false; fi
 
 echo "All tests OK"
