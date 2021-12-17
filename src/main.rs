@@ -57,7 +57,6 @@ struct CurlIndex {
 #[response(content_type = "image/png")]
 struct PngResponder(Vec<u8>);
 
-
 #[derive(Responder)]
 enum HtmlOrPlain {
     #[response(content_type = "html")]
