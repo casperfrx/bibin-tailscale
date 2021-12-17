@@ -28,8 +28,7 @@ use io::{delete_paste, get_paste, store_paste, store_paste_given_id};
 use isplaintextrequest::IsPlaintextRequest;
 use rocket::data::ToByteUnit;
 use rocket::form::Form;
-use rocket::http::{ContentType, RawStr, Status};
-use rocket::response::content::Custom;
+use rocket::http::{RawStr, Status};
 use rocket::response::Redirect;
 use rocket::tokio::io::AsyncReadExt;
 use rocket::uri;
@@ -54,35 +53,52 @@ struct CurlIndex {
     root_url: String,
 }
 
+#[derive(Responder)]
+#[response(content_type = "image/png")]
+struct PngResponder(Vec<u8>);
+
+
+#[derive(Responder)]
+enum HtmlOrPlain {
+    #[response(content_type = "html")]
+    Html(String),
+
+    #[response(content_type = "plain")]
+    Plain(String),
+}
+
+#[derive(Responder)]
+enum RedirectOrContent {
+    Redirect(Redirect),
+
+    #[response(content_type = "image/png")]
+    Png(Vec<u8>),
+
+    #[response(content_type = "html")]
+    Html(String),
+
+    #[response(content_type = "plain")]
+    Plain(String),
+}
+
 #[get("/")]
 fn index(
     config: &State<BibinConfig>,
     plaintext: IsPlaintextRequest,
-) -> Result<Custom<String>, Status> {
+) -> Result<HtmlOrPlain, Status> {
     if plaintext.0 {
         CurlIndex {
             root_url: config.prefix.clone(),
         }
         .render()
-        .map(|x| Custom(ContentType::Plain, x))
+        .map(HtmlOrPlain::Plain)
         .map_err(|_| Status::InternalServerError)
     } else {
         Index
             .render()
-            .map(|x| Custom(ContentType::HTML, x))
+            .map(HtmlOrPlain::Html)
             .map_err(|_| Status::InternalServerError)
     }
-}
-
-///
-/// This type allow us to either return a Content or a Redirect to another page
-///
-
-#[derive(Responder)]
-enum RedirectOrContent {
-    Redirect(Redirect),
-    String(Custom<String>),
-    Binary(Custom<Vec<u8>>),
 }
 
 ///
@@ -105,7 +121,7 @@ async fn submit(
     if !form_data.password.is_valid(&config.password) {
         Err(Status::Unauthorized)
     } else {
-        match store_paste(&pool, config.id_length, config.max_entries, form_data.val).await {
+        match store_paste(pool, config.id_length, config.max_entries, form_data.val).await {
             Ok(id) => {
                 let uri = uri!(show_paste(id));
                 Ok(Redirect::to(uri))
@@ -129,7 +145,7 @@ async fn submit_with_key(
     if !form_data.password.is_valid(&config.password) {
         Err(Status::Unauthorized)
     } else {
-        match store_paste_given_id(&pool, key, form_data.val).await {
+        match store_paste_given_id(pool, key, form_data.val).await {
             Ok(id) => {
                 let uri = uri!(show_paste(id));
                 Ok(Redirect::to(uri))
@@ -160,7 +176,7 @@ async fn submit_raw(
         .await
         .map_err(|_| Status::InternalServerError)?;
 
-    match store_paste(&pool, config.id_length, config.max_entries, data).await {
+    match store_paste(pool, config.id_length, config.max_entries, data).await {
         Ok(id) => {
             let uri = uri!(show_paste(id));
             Ok(format!("{}{}", config.prefix, uri))
@@ -191,7 +207,7 @@ async fn submit_raw_with_key(
         .await
         .map_err(|_| Status::InternalServerError)?;
 
-    match store_paste_given_id(&pool, key, data).await {
+    match store_paste_given_id(pool, key, data).await {
         Ok(id) => {
             let uri = uri!(show_paste(id));
             Ok(format!("{}{}", config.prefix, uri))
@@ -214,7 +230,7 @@ async fn delete(
         return Err(Status::Unauthorized);
     }
 
-    match delete_paste(&pool, id).await {
+    match delete_paste(pool, id).await {
         Ok(id) => Ok(format!("{} deleted", id)),
         Err(e) => {
             error!("[DELETE_PASTE] {}", e);
@@ -238,10 +254,10 @@ async fn get_qr(
     name: String,
     config: &State<BibinConfig>,
     pool: &State<ReadPool>,
-) -> Result<Custom<Vec<u8>>, Status> {
+) -> Result<PngResponder, Status> {
     let mut splitter = name.splitn(2, '.');
     let key = splitter.next().ok_or(Status::NotFound)?;
-    match get_paste(&pool, key).await {
+    match get_paste(pool, key).await {
         // TODO: not found or Internal error
         Ok(None) => return Err(Status::NotFound),
         Err(e) => {
@@ -257,7 +273,7 @@ async fn get_qr(
         1024,
     )
     .unwrap();
-    Ok(Custom(ContentType::PNG, result))
+    Ok(PngResponder(result))
 }
 
 #[get("/<key>")]
@@ -271,7 +287,7 @@ async fn show_paste(
     let key = splitter.next().ok_or(Status::NotFound)?;
     let ext = splitter.next();
 
-    let entry = match get_paste(&pool, key).await {
+    let entry = match get_paste(pool, key).await {
         Ok(Some(data)) => data,
         Ok(None) => return Err(Status::NotFound),
         Err(e) => {
@@ -284,24 +300,19 @@ async fn show_paste(
         match extension {
             "url" => return Ok(RedirectOrContent::Redirect(Redirect::to(entry))),
             "qr" => match qrcode_generator::to_png_to_vec(entry, QrCodeEcc::Medium, 1024) {
-                Ok(code) => return Ok(RedirectOrContent::Binary(Custom(ContentType::PNG, code))),
+                Ok(code) => return Ok(RedirectOrContent::Png(code)),
                 Err(e) => {
                     warn!("[SHOW_PASTE] qrcode_generator: {}", e);
                     return Err(Status::InternalServerError);
                 }
             },
-            "b64" => {
-                return Ok(RedirectOrContent::String(Custom(
-                    ContentType::Plain,
-                    base64::encode(entry),
-                )))
-            }
+            "b64" => return Ok(RedirectOrContent::Plain(base64::encode(entry))),
             _ => (),
         }
     }
 
     if *plaintext {
-        Ok(RedirectOrContent::String(Custom(ContentType::Plain, entry)))
+        Ok(RedirectOrContent::Plain(entry))
     } else {
         let code_highlighted = match ext {
             Some(extension) => match highlighter.highlight(&entry, extension) {
@@ -321,7 +332,7 @@ async fn show_paste(
 
         let template = ShowPaste { content };
         match template.render() {
-            Ok(html) => Ok(RedirectOrContent::String(Custom(ContentType::HTML, html))),
+            Ok(html) => Ok(RedirectOrContent::Html(html)),
             Err(_) => Err(Status::InternalServerError),
         }
     }
