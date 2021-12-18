@@ -33,7 +33,8 @@ impl<'a> FromRequest<'a> for IsPlaintextRequest {
         match request
             .headers()
             .get_one("User-Agent")
-            .and_then(|u| u.split_once('/')).map(|u| u.0)
+            .and_then(|u| u.split_once('/'))
+            .map(|u| u.0)
         {
             None | Some("Wget") | Some("curl") | Some("HTTPie") => {
                 Outcome::Success(IsPlaintextRequest(true))
