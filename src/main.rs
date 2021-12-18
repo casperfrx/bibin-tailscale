@@ -66,6 +66,7 @@ enum HtmlOrPlain {
     Plain(String),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Responder)]
 enum RedirectOrContent {
     Redirect(Redirect),
