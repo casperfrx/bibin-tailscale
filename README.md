@@ -1,6 +1,8 @@
 # (bi)bin
 
-A fork of the excellent [bin](https://github.com/w4/bin). It is a pastebin-like project for my own website: quick scratchpad, url shortener, QR code generator... I also added a rudimentary password protection scheme because I did not want to have to curate the content.
+A (heavily modified) fork of the excellent [bin](https://github.com/w4/bin) that I used as a starting point for this project.
+
+`(bi)bin` is a pastebin-like project for my own website: quick scratchpad, url shortener, QR code generator... I also added a rudimentary password protection scheme because I did not want to have to curate the content.
 
 It is optimized for speed and can handle hundreds of clients per second (async code with [Rocket](https://rocket.rs/)/[SQLx](https://github.com/launchbadge/sqlx)).
 
