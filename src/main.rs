@@ -1,3 +1,7 @@
+#![allow(clippy::unnecessary_lazy_evaluations)]
+/// Until https://github.com/rust-lang/rust-clippy/pull/9486
+/// lands into clippy
+
 #[macro_use]
 extern crate rocket;
 
@@ -325,7 +329,7 @@ async fn show_paste(
         // Add <code> tags to enable line numbering with CSS
         let html = format!(
             "<code>{}</code>",
-            code_highlighted.replace("\n", "</code><code>")
+            code_highlighted.replace('\n', "</code><code>")
         );
 
         let content = MarkupDisplay::new_safe(Cow::Borrowed(&html), AskamaHtml);
