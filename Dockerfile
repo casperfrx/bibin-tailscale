@@ -1,4 +1,4 @@
-FROM rust:1-slim-stretch AS builder
+FROM rust:1-slim-bullseye AS builder
 RUN rustup install stable-x86_64-unknown-linux-gnu
 RUN rustup default stable
 
