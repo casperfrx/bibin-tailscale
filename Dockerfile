@@ -10,7 +10,7 @@ RUN cargo build --release
 RUN chown nobody:nogroup /sources/target/release/bibin
 
 
-FROM debian:stretch-slim
+FROM debian:bullseye-slim
 COPY --from=builder /sources/target/release/bibin /opt/bibin
 
 WORKDIR /etc/secrets
