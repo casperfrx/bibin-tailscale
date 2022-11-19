@@ -8,7 +8,7 @@ It is optimized for speed and can handle hundreds of clients per second (async c
 
 ### Persistence
 
-The entries are stored in a Sqlite database. The entries are stored in the file described in the `database_file` configuration key. To persistance and use an in-memory keystore, use the special file `:memory:`.
+The entries are stored in a Sqlite database file defined by the `database_file` configuration key. To disable persistance and use an in-memory keystore, use the special file `:memory:`.
 
 ### Configuration
 
@@ -72,9 +72,12 @@ $ curl -X PUT -u "anything:YOUR_PASSWORD" --data 'hello world' https://YOUR.WEBS
 
 **Syntax highlighting**: you need to add the file extension at the end of your paste URL.
 
-**Special extensions**:
-- `.url` will trigger a http redirect to whatever is in the post. This works with curl requests as well!
+**URL Shortener**: the extension `.url` will trigger a http redirect to the url that is in the content. This works with curl requests as well!
+
+**Other special extensions**:
 - `.b64` will return the content base64-encoded
 - `.qr` will return the content as a qr code
 
 **Generate a QR code from the url**: Add `/qr` at the end of your bibin URL: `https://bi.bin/cateettary.c/qr`
+
+**Expose text files for services**: Add `/raw` at the end of the bibin URL: `https://bi.bin/browser_blocklist.txt/raw`
