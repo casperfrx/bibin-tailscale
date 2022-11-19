@@ -19,7 +19,8 @@ impl WritePool {
         Ok(WritePool(
             sqlx::pool::PoolOptions::<sqlx::Sqlite>::new()
                 .max_connections(1)
-                .connect_timeout(Duration::from_secs(60))
+                .idle_timeout(Duration::from_secs(180))
+                .acquire_timeout(Duration::from_secs(5))
                 .connect_with(
                     SqliteConnectOptions::new()
                         .filename(file_name)

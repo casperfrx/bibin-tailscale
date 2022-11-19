@@ -12,34 +12,29 @@ extern crate base64;
 
 extern crate qrcode_generator;
 
-use qrcode_generator::QrCodeEcc;
-
 extern crate askama;
 
 extern crate serde;
 
 mod auth;
 mod config;
+mod get;
 mod highlight;
 mod io;
 mod isplaintextrequest;
 
-use askama::{Html as AskamaHtml, MarkupDisplay, Template};
 use auth::AuthKey;
 use config::BibinConfig;
 use highlight::Highlighter;
-use io::{delete_paste, get_paste, store_paste, store_paste_given_id};
-use isplaintextrequest::IsPlaintextRequest;
+use io::{delete_paste, store_paste, store_paste_given_id};
 use rocket::data::ToByteUnit;
 use rocket::form::Form;
-use rocket::http::{RawStr, Status};
+use rocket::http::Status;
 use rocket::response::Redirect;
 use rocket::tokio::io::AsyncReadExt;
 use rocket::uri;
 use rocket::Data;
 use rocket::State;
-
-use std::borrow::Cow;
 
 use io::{ReadPool, WritePool};
 
@@ -47,22 +42,8 @@ use io::{ReadPool, WritePool};
 /// Homepage
 ///
 
-#[derive(Template)]
-#[template(path = "index.html")]
-struct Index;
-
-#[derive(Template)]
-#[template(path = "curl_help.txt")]
-struct CurlIndex {
-    root_url: String,
-}
-
 #[derive(Responder)]
-#[response(content_type = "image/png")]
-struct PngResponder(Vec<u8>);
-
-#[derive(Responder)]
-enum HtmlOrPlain {
+pub enum HtmlOrPlain {
     #[response(content_type = "html")]
     Html(String),
 
@@ -72,7 +53,7 @@ enum HtmlOrPlain {
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Responder)]
-enum RedirectOrContent {
+pub enum RedirectOrContent {
     Redirect(Redirect),
 
     #[response(content_type = "image/png")]
@@ -85,30 +66,9 @@ enum RedirectOrContent {
     Plain(String),
 }
 
-#[get("/")]
-fn index(
-    config: &State<BibinConfig>,
-    plaintext: IsPlaintextRequest,
-) -> Result<HtmlOrPlain, Status> {
-    if plaintext.0 {
-        CurlIndex {
-            root_url: config.prefix.clone(),
-        }
-        .render()
-        .map(HtmlOrPlain::Plain)
-        .map_err(|_| Status::InternalServerError)
-    } else {
-        Index
-            .render()
-            .map(HtmlOrPlain::Html)
-            .map_err(|_| Status::InternalServerError)
-    }
-}
-
 ///
 /// Submit Paste
 ///
-
 #[derive(FromForm, Clone)]
 struct IndexForm {
     val: String,
@@ -127,7 +87,7 @@ async fn submit(
     } else {
         match store_paste(pool, config.id_length, config.max_entries, form_data.val).await {
             Ok(id) => {
-                let uri = uri!(show_paste(id));
+                let uri = uri!(get::show_paste(id));
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
@@ -151,7 +111,7 @@ async fn submit_with_key(
     } else {
         match store_paste_given_id(pool, key, form_data.val).await {
             Ok(id) => {
-                let uri = uri!(show_paste(id));
+                let uri = uri!(get::show_paste(id));
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
@@ -182,7 +142,7 @@ async fn submit_raw(
 
     match store_paste(pool, config.id_length, config.max_entries, data).await {
         Ok(id) => {
-            let uri = uri!(show_paste(id));
+            let uri = uri!(get::show_paste(id));
             Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {
@@ -213,7 +173,7 @@ async fn submit_raw_with_key(
 
     match store_paste_given_id(pool, key, data).await {
         Ok(id) => {
-            let uri = uri!(show_paste(id));
+            let uri = uri!(get::show_paste(id));
             Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {
@@ -239,105 +199,6 @@ async fn delete(
         Err(e) => {
             error!("[DELETE_PASTE] {}", e);
             Err(Status::InternalServerError)
-        }
-    }
-}
-
-///
-/// Show paste page
-///
-
-#[derive(Template)]
-#[template(path = "paste.html")]
-struct ShowPaste<'a> {
-    content: MarkupDisplay<AskamaHtml, Cow<'a, String>>,
-}
-
-#[get("/<name>/qr")]
-async fn get_qr(
-    name: String,
-    config: &State<BibinConfig>,
-    pool: &State<ReadPool>,
-) -> Result<PngResponder, Status> {
-    let mut splitter = name.splitn(2, '.');
-    let key = splitter.next().ok_or(Status::NotFound)?;
-    match get_paste(pool, key).await {
-        // TODO: not found or Internal error
-        Ok(None) => return Err(Status::NotFound),
-        Err(e) => {
-            warn!("[GET_QR] Error in get_paste: {}", e);
-            return Err(Status::InternalServerError);
-        }
-        Ok(Some(_)) => (),
-    };
-
-    let result = qrcode_generator::to_png_to_vec(
-        format!("{}/{}", config.prefix, &name),
-        QrCodeEcc::Medium,
-        1024,
-    )
-    .unwrap();
-    Ok(PngResponder(result))
-}
-
-#[get("/<key>")]
-async fn show_paste(
-    key: String,
-    plaintext: IsPlaintextRequest,
-    pool: &State<ReadPool>,
-    highlighter: &State<Highlighter>,
-) -> Result<RedirectOrContent, Status> {
-    let mut splitter = key.splitn(2, '.');
-    let key = splitter.next().ok_or(Status::NotFound)?;
-    let ext = splitter.next();
-
-    let entry = match get_paste(pool, key).await {
-        Ok(Some(data)) => data,
-        Ok(None) => return Err(Status::NotFound),
-        Err(e) => {
-            warn!("[SHOW_PASTE] get_paste error: {}", e);
-            return Err(Status::InternalServerError);
-        }
-    };
-
-    if let Some(extension) = ext {
-        match extension {
-            "url" => return Ok(RedirectOrContent::Redirect(Redirect::to(entry))),
-            "qr" => match qrcode_generator::to_png_to_vec(entry, QrCodeEcc::Medium, 1024) {
-                Ok(code) => return Ok(RedirectOrContent::Png(code)),
-                Err(e) => {
-                    warn!("[SHOW_PASTE] qrcode_generator: {}", e);
-                    return Err(Status::InternalServerError);
-                }
-            },
-            "b64" => return Ok(RedirectOrContent::Plain(base64::encode(entry))),
-            _ => (),
-        }
-    }
-
-    if *plaintext {
-        Ok(RedirectOrContent::Plain(entry))
-    } else {
-        let code_highlighted = match ext {
-            Some(extension) => match highlighter.highlight(&entry, extension) {
-                Some(html) => html,
-                None => return Err(Status::NotFound),
-            },
-            None => String::from(RawStr::new(&entry).html_escape()),
-        };
-
-        // Add <code> tags to enable line numbering with CSS
-        let html = format!(
-            "<code>{}</code>",
-            code_highlighted.replace('\n', "</code><code>")
-        );
-
-        let content = MarkupDisplay::new_safe(Cow::Borrowed(&html), AskamaHtml);
-
-        let template = ShowPaste { content };
-        match template.render() {
-            Ok(html) => Ok(RedirectOrContent::Html(html)),
-            Err(_) => Err(Status::InternalServerError),
         }
     }
 }
@@ -381,13 +242,14 @@ async fn rocket() -> rocket::Rocket<rocket::Build> {
     rkt.mount(
         "/",
         routes![
-            index,
+            get::index,
             submit,
             submit_with_key,
             submit_raw,
             submit_raw_with_key,
-            show_paste,
-            get_qr,
+            get::show_paste,
+            get::get_qr,
+            get::get_raw,
             delete
         ],
     )
