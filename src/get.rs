@@ -1,13 +1,16 @@
+use crate::auth::AuthKey;
 use crate::config::BibinConfig;
 use crate::highlight::Highlighter;
-use crate::io::{get_paste, ReadPool};
+use crate::io::{get_all_paste, get_paste, ReadPool};
 use crate::RedirectOrContent;
 use crate::{isplaintextrequest::IsPlaintextRequest, HtmlOrPlain};
 use qrcode_generator::QrCodeEcc;
 use rocket::http::{RawStr, Status};
+use rocket::response::content::RawJson;
 use rocket::response::Redirect;
 use rocket::State;
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use askama::{Html as AskamaHtml, MarkupDisplay, Template};
 
@@ -53,6 +56,32 @@ pub fn index(
             .map(HtmlOrPlain::Html)
             .map_err(|_| Status::InternalServerError)
     }
+}
+
+#[get("/all_entries")]
+pub async fn all_entries(
+    pool: &State<ReadPool>,
+    password: AuthKey,
+    config: &State<BibinConfig>,
+) -> Result<RawJson<String>, Status> {
+    if !password.is_valid(&config.password) {
+        return Err(Status::Unauthorized);
+    }
+
+    let entries = match get_all_paste(pool).await {
+        Ok(entries) => entries,
+        Err(e) => {
+            warn!("[ALL_ENTRIES] Error in get_all_paste: {}", e);
+            return Err(Status::InternalServerError);
+        }
+    };
+    // Convert entries into a hashmap
+    let result = entries
+        .iter()
+        .map(|(k, v)| (k, v))
+        .collect::<HashMap<&String, &String>>();
+    let json = serde_json::to_string(&result).unwrap();
+    Ok(RawJson(json))
 }
 
 #[get("/<name>/qr")]

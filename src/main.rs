@@ -107,6 +107,7 @@ async fn rocket() -> rocket::Rocket<rocket::Build> {
             write::submit_raw_with_key,
             get::show_paste,
             get::get_qr,
+            get::all_entries,
             get::get_raw,
             write::delete
         ],

@@ -18,6 +18,7 @@ async-trait = "0.1"
 base64 = "0.13.0"
 log = "0.4.14"
 serde = "1.0.126"
+serde_json = "1.0.96"
 sqlx = { version = "0.6.2", features = ['runtime-tokio-rustls', 'sqlite'] }
 
 [profile.release]

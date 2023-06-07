@@ -205,6 +205,14 @@ pub async fn get_paste(pool: &ReadPool, id: &str) -> Result<Option<String>, IOEr
     }
 }
 
+pub async fn get_all_paste(pool: &ReadPool) -> Result<Vec<(String, String)>, IOError> {
+    let result = sqlx::query("SELECT id, data FROM entries")
+        .fetch_all(&pool.0)
+        .await?;
+
+    Ok(result.iter().map(|row| (row.get(0), row.get(1))).collect())
+}
+
 #[derive(Debug)]
 pub struct IOError(String);
 
