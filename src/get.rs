@@ -4,6 +4,7 @@ use crate::highlight::Highlighter;
 use crate::io::{get_all_paste, get_paste, ReadPool};
 use crate::RedirectOrContent;
 use crate::{isplaintextrequest::IsPlaintextRequest, HtmlOrPlain};
+use base64::{engine::general_purpose, Engine as _};
 use qrcode_generator::QrCodeEcc;
 use rocket::http::{RawStr, Status};
 use rocket::response::content::RawJson;
@@ -158,7 +159,11 @@ pub async fn show_paste(
                     return Err(Status::InternalServerError);
                 }
             },
-            "b64" => return Ok(RedirectOrContent::Plain(base64::encode(entry))),
+            "b64" => {
+                return Ok(RedirectOrContent::Plain(
+                    general_purpose::STANDARD.encode(entry),
+                ))
+            }
             _ => (),
         }
     }

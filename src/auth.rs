@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose, Engine as _};
 use rocket::form;
 use rocket::http::Status;
 use rocket::outcome::Outcome;
@@ -61,7 +62,7 @@ fn auth_from_auth_header(request: &'_ Request<'_>) -> Result<Option<AuthKey>, Au
                 Err(AuthError::UnsupportedAuth)
             } else {
                 let token: Vec<&str> = basic_token.splitn(2, ' ').collect();
-                let decoded_token = &base64::decode(token[1])?;
+                let decoded_token = &general_purpose::STANDARD.decode(token[1])?;
                 let decoded = std::str::from_utf8(decoded_token)?;
                 if !decoded.contains(':') {
                     Err(AuthError::InvalidData)
