@@ -132,7 +132,7 @@ pub async fn delete(
         return Err(Status::Unauthorized);
     }
 
-    match delete_paste(pool, id).await {
+    match delete_paste(pool, &id).await {
         Ok(id) => Ok(format!("{} deleted", id)),
         Err(e) => {
             error!("[DELETE_PASTE] {}", e);

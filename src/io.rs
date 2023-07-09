@@ -92,9 +92,9 @@ pub async fn remove_old(
 }
 
 /// Delete a paste under the given id
-pub async fn delete_paste(pool: &WritePool, id: String) -> Result<String, IOError> {
+pub async fn delete_paste<'a>(pool: &WritePool, id: &'a str) -> Result<&'a str, IOError> {
     let result = sqlx::query("DELETE FROM entries WHERE id = ?")
-        .bind(&id)
+        .bind(id)
         .execute(&pool.0)
         .await?;
 
@@ -182,10 +182,6 @@ pub async fn store_paste_given_id(
     Ok(id)
 }
 
-/// Get a paste by id.
-///
-/// Returns `None` if the paste doesn't exist.
-
 pub async fn get_paste(pool: &ReadPool, id: &str) -> Result<Option<String>, IOError> {
     let result = sqlx::query("SELECT data FROM entries WHERE id = ?")
         .bind(id)
@@ -219,5 +215,38 @@ impl Display for IOError {
 impl From<sqlx::error::Error> for IOError {
     fn from(e: sqlx::error::Error) -> IOError {
         IOError(format!("DB Error: {}", e))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[async_test]
+    async fn simple_workflow() {
+        // See this page for more details on in-memory DBs and how they
+        // should share caches for this to work properly
+        // https://www.sqlite.org/inmemorydb.html
+        let uri_shared_memory = "file::memory:?cache=shared";
+
+        let write_pool = WritePool::new(uri_shared_memory).await.unwrap();
+        assert!(write_pool.init().await.is_ok());
+
+        let read_pool = ReadPool::new(uri_shared_memory, 10).await.unwrap();
+
+        let data = String::from("SOME_DATA");
+
+        let id = store_paste(&write_pool, 4, 2048, data.clone())
+            .await
+            .unwrap();
+        assert_eq!(get_paste(&read_pool, &id).await.unwrap().unwrap(), data);
+        assert_eq!(
+            get_all_paste(&read_pool).await.unwrap(),
+            vec![(id.clone(), data.clone())]
+        );
+        assert_eq!(delete_paste(&write_pool, &id).await.unwrap(), id);
+        assert!(delete_paste(&write_pool, &id).await.is_err());
+        assert!(get_paste(&read_pool, &id).await.unwrap().is_none());
+        assert_eq!(get_all_paste(&read_pool).await.unwrap(), vec![]);
     }
 }
