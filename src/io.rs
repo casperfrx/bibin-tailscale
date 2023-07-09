@@ -1,9 +1,7 @@
-extern crate gpw;
 extern crate rand;
 
 use rand::{thread_rng, Rng};
 
-use std::cell::RefCell;
 use std::time::Duration;
 
 use sqlx::Row;
@@ -66,13 +64,9 @@ impl ReadPool {
     }
 }
 
-/// Generates a 'pronounceable' random ID using gpw
 fn generate_id(length: usize) -> String {
-    thread_local!(static KEYGEN: RefCell<gpw::PasswordGenerator> = RefCell::new(gpw::PasswordGenerator::default()));
-
     // removed 0/o, i/1/l, u/v as they are too similar. with 4 char this gives us >700'000 unique ids
     const CHARSET: &[u8] = b"abcdefghjkmnpqrstwxyz23456789";
-
     (0..length)
         .map(|_| {
             let idx = thread_rng().gen_range(0..CHARSET.len());
