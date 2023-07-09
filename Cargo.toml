@@ -9,7 +9,7 @@ edition = "2018"
 
 [dependencies]
 qrcode-generator = "4.1.1"
-rocket = "0.5.0-rc.3"
+rocket = "0.5.0-rc"
 askama = "0.12.0"
 rand = "0.8.4"
 gpw = "0.1"
