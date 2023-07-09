@@ -23,7 +23,7 @@ jobs:
         run: cargo clippy --all --all-features -- -Dwarnings
 
       - name: Run tests
-        run: cargo tests --no-fail-fast
+        run: cargo test --no-fail-fast
 
   test:
     name: Test
