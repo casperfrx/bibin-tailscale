@@ -98,3 +98,74 @@ impl<'a> FromRequest<'a> for AuthKey {
         Outcome::Failure((Status::Unauthorized, AuthError::Missing))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::rocket;
+    use rocket::http::Header;
+    use rocket::http::Status;
+    use rocket::local::blocking::Client;
+
+    use super::AuthKey;
+
+    #[get("/tests/authkey")]
+    fn tests_authkey(key: AuthKey) -> String {
+        key.0
+    }
+
+    #[test]
+    fn test_no_header() {
+        let client = Client::debug_with(routes![tests_authkey]).unwrap();
+        let response = client.get(uri!(tests_authkey)).dispatch();
+
+        assert_eq!(response.status(), Status::Unauthorized);
+    }
+
+    #[test]
+    fn test_auth_from_auth_header() {
+        let client = Client::debug_with(routes![tests_authkey]).unwrap();
+
+        let response = client
+            .get(uri!(tests_authkey))
+            .header(Header::new(
+                "Authorization",
+                // my_name:my_password
+                "Basic bXlfbmFtZTpteV9wYXNzd29yZA==",
+            ))
+            .dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(response.into_string().unwrap(), "my_password");
+
+        let response = client
+            .get(uri!(tests_authkey))
+            .header(Header::new(
+                "Authorization",
+                // my_name:my_password
+                "Basic NOT_BASE64",
+            ))
+            .dispatch();
+        assert_eq!(response.status(), Status::Unauthorized);
+    }
+
+    #[test]
+    fn test_auth_from_api_key() {
+        let client = Client::debug_with(routes![tests_authkey]).unwrap();
+        let response = client.get(uri!(tests_authkey)).dispatch();
+
+        assert_eq!(response.status(), Status::Unauthorized);
+
+        let response = client
+            .get(uri!(tests_authkey))
+            .header(Header::new("X-API-Key", "my_password"))
+            .dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(response.into_string().unwrap(), "my_password");
+
+        let response = client
+            .get(uri!(tests_authkey))
+            .header(Header::new("X-API-Key", ""))
+            .dispatch();
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(response.into_string().unwrap(), "");
+    }
+}
