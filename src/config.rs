@@ -29,3 +29,33 @@ pub struct BibinConfig {
     #[serde(default = "default_max_entries")]
     pub max_entries: i32,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        default_database_connections, default_database_file, default_id_length,
+        default_max_entries, BibinConfig,
+    };
+
+    #[test]
+    fn check_default_values() {
+        let default_values =
+            serde_json::from_str::<BibinConfig>(r#"{ "password": "A", "prefix": "/" }"#).unwrap();
+        assert_eq!(default_values.prefix, "/");
+        assert_eq!(default_values.id_length, default_id_length());
+        assert_eq!(
+            default_values.database_connections,
+            default_database_connections()
+        );
+        assert_eq!(default_values.max_entries, default_max_entries());
+        assert_eq!(default_values.database_file, default_database_file());
+    }
+
+    #[test]
+    fn check_missing_values() {
+        assert!(serde_json::from_str::<BibinConfig>(r#"{ "password": "A" }"#).is_err());
+        assert!(serde_json::from_str::<BibinConfig>(r#"{ "prefix": "/" }"#).is_err());
+        assert!(serde_json::from_str::<BibinConfig>(r#"{ }"#).is_err());
+        assert!(serde_json::from_str::<BibinConfig>(r#"AAAAA"#).is_err());
+    }
+}
