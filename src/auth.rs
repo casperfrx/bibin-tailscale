@@ -83,19 +83,19 @@ impl<'a> FromRequest<'a> for AuthKey {
     async fn from_request(request: &'a Request<'_>) -> request::Outcome<Self, Self::Error> {
         match auth_from_api_header(request) {
             Ok(Some(x)) => return Outcome::Success(x),
-            Err(x) => return Outcome::Failure((Status::Unauthorized, x)),
+            Err(x) => return Outcome::Error((Status::Unauthorized, x)),
             _ => {}
         };
         debug!("[AUTH] No API Header found");
 
         match auth_from_auth_header(request) {
             Ok(Some(x)) => return Outcome::Success(x),
-            Err(x) => return Outcome::Failure((Status::Unauthorized, x)),
+            Err(x) => return Outcome::Error((Status::Unauthorized, x)),
             _ => {}
         };
         debug!("[AUTH] No Authorization Header found");
 
-        Outcome::Failure((Status::Unauthorized, AuthError::Missing))
+        Outcome::Error((Status::Unauthorized, AuthError::Missing))
     }
 }
 

@@ -157,7 +157,7 @@ pub async fn store_paste(
     warn!("ID Collision again, last attempt");
     let id = generate_id(id_length);
     sqlx::query("INSERT INTO entries (id, data) VALUES (?, ?)")
-        .bind(&generate_id(id_length))
+        .bind(generate_id(id_length))
         .bind(&content)
         .execute(&mut cnx)
         .await?;
