@@ -79,14 +79,16 @@ pub async fn remove_old(
     cnx: &mut sqlx::pool::PoolConnection<sqlx::Sqlite>,
     max_entries: i32,
 ) -> Result<u64, IOError> {
-    let result = sqlx::query(
-        "DELETE FROM entries WHERE internal_id IN (
+    let result = cnx
+        .execute(
+            sqlx::query(
+                "DELETE FROM entries WHERE internal_id IN (
             SELECT internal_id FROM entries ORDER BY internal_id ASC LIMIT (
                 SELECT MAX(COUNT(*) - ?,0)  FROM entries))",
-    )
-    .bind(max_entries)
-    .execute(cnx)
-    .await?;
+            )
+            .bind(max_entries),
+        )
+        .await?;
 
     Ok(result.rows_affected())
 }
@@ -115,18 +117,20 @@ pub async fn store_paste(
     let mut cnx = pool.0.acquire().await?;
 
     let id = generate_id(id_length);
-    let result = sqlx::query("INSERT OR IGNORE INTO entries (id, data) VALUES (?, ?)")
-        .bind(&id)
-        .bind(&content)
-        .execute(&mut cnx)
+    let result = cnx
+        .execute(
+            sqlx::query("INSERT OR IGNORE INTO entries (id, data) VALUES (?, ?)")
+                .bind(&id)
+                .bind(&content),
+        )
         .await?;
 
     if result.rows_affected() == 1 {
         return Ok(id);
     }
 
-    let entries = sqlx::query("select count(*) from entries")
-        .fetch_one(&mut cnx)
+    let entries = cnx
+        .fetch_one(sqlx::query("select count(*) from entries"))
         .await?
         .get::<i32, usize>(0);
 
@@ -142,10 +146,12 @@ pub async fn store_paste(
     while retries < max_entries {
         warn!("Another ID Collision: {}/{}", retries, max_retries);
         let id = generate_id(id_length);
-        let result = sqlx::query("INSERT OR IGNORE INTO entries (id, data) VALUES (?, ?)")
-            .bind(&id)
-            .bind(&content)
-            .execute(&mut cnx)
+        let result = cnx
+            .execute(
+                sqlx::query("INSERT OR IGNORE INTO entries (id, data) VALUES (?, ?)")
+                    .bind(&id)
+                    .bind(&content),
+            )
             .await?;
 
         if result.rows_affected() == 1 {
@@ -156,11 +162,12 @@ pub async fn store_paste(
 
     warn!("ID Collision again, last attempt");
     let id = generate_id(id_length);
-    sqlx::query("INSERT INTO entries (id, data) VALUES (?, ?)")
-        .bind(generate_id(id_length))
-        .bind(&content)
-        .execute(&mut cnx)
-        .await?;
+    cnx.execute(
+        sqlx::query("INSERT INTO entries (id, data) VALUES (?, ?)")
+            .bind(generate_id(id_length))
+            .bind(&content),
+    )
+    .await?;
 
     Ok(id)
 }
@@ -173,10 +180,12 @@ pub async fn store_paste_given_id(
 ) -> Result<String, IOError> {
     let mut cnx = pool.0.acquire().await?;
 
-    let _result = sqlx::query("INSERT OR REPLACE INTO entries (id, data) VALUES (?, ?)")
-        .bind(&id)
-        .bind(&content)
-        .execute(&mut cnx)
+    let _result = cnx
+        .execute(
+            sqlx::query("INSERT OR REPLACE INTO entries (id, data) VALUES (?, ?)")
+                .bind(&id)
+                .bind(&content),
+        )
         .await?;
 
     Ok(id)
