@@ -1,20 +1,8 @@
-#![allow(clippy::unnecessary_lazy_evaluations)]
-/// Until https://github.com/rust-lang/rust-clippy/pull/9486
-/// lands into clippy
-
 #[macro_use]
 extern crate rocket;
 
 #[macro_use]
 extern crate log;
-
-extern crate base64;
-
-extern crate qrcode_generator;
-
-extern crate askama;
-
-extern crate serde;
 
 mod auth;
 mod config;
