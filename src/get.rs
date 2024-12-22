@@ -112,9 +112,9 @@ pub async fn get_qr(
     Ok(PngResponder(result))
 }
 
-#[get("/<name>/raw")]
-pub async fn get_raw(name: String, pool: &State<ReadPool>) -> Result<HtmlOrPlain, Status> {
-    let mut splitter = name.splitn(2, '.');
+#[get("/<key>/raw")]
+pub async fn get_item_raw(key: &str, pool: &State<ReadPool>) -> Result<HtmlOrPlain, Status> {
+    let mut splitter = key.splitn(2, '.');
     let key = splitter.next().ok_or(Status::NotFound)?;
     let content = match get_paste(pool, key).await {
         // TODO: not found or Internal error
@@ -130,8 +130,8 @@ pub async fn get_raw(name: String, pool: &State<ReadPool>) -> Result<HtmlOrPlain
 }
 
 #[get("/<key>")]
-pub async fn show_paste(
-    key: String,
+pub async fn get_item(
+    key: &str,
     plaintext: IsPlaintextRequest,
     pool: &State<ReadPool>,
     highlighter: &State<Highlighter>,
@@ -195,5 +195,133 @@ pub async fn show_paste(
             Ok(html) => Ok(RedirectOrContent::Html(html)),
             Err(_) => Err(Status::InternalServerError),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::collections::HashMap;
+    use std::iter::FromIterator;
+
+    use crate::config::BibinConfig;
+    use crate::highlight::Highlighter;
+    use crate::io;
+    use crate::io::{ReadPool, WritePool};
+    use crate::rocket;
+    use rocket::http::ext::IntoCollection;
+    use rocket::http::{Header, Status};
+    use rocket::local::asynchronous::Client;
+    use rocket::tokio;
+    use tempfile::NamedTempFile;
+
+    use super::get_qr;
+    use super::index;
+    use super::{all_entries, rocket_uri_macro_all_entries};
+    use super::{get_item, rocket_uri_macro_get_item};
+    use super::{get_item_raw, rocket_uri_macro_get_item_raw};
+
+    const ENTRY_CONTENT: &str = "This is a test";
+    const PASSWORD: &str = "password123";
+
+    async fn create_test_client() -> (NamedTempFile, Client) {
+        let temp = NamedTempFile::new().unwrap();
+        let file_name = temp.path().to_str().unwrap();
+        let write_pool = WritePool::new(file_name)
+            .await
+            .expect("Error when creating the writing pool");
+
+        write_pool
+            .init()
+            .await
+            .expect("Error during initialization");
+
+        let read_pool = ReadPool::new(file_name, 10)
+            .await
+            .expect("Error when creating the reading pool");
+
+        let rocket = rocket::Rocket::build()
+            .manage(read_pool)
+            .manage(write_pool)
+            .manage(Highlighter::new())
+            .manage(
+                serde_json::from_str::<BibinConfig>(
+                    r#"{ "password": "password123", "prefix": "/" }"#,
+                )
+                .unwrap(),
+            )
+            .mount(
+                "/",
+                routes![index, all_entries, get_qr, get_item, get_item_raw],
+            );
+        // the NamedTempFile will be deleted when `temp` goes out of scope. We need
+        // to hand it over to the tests so that it stays on the fs until the end of the test
+        (temp, Client::untracked(rocket).await.unwrap())
+    }
+
+    #[rocket::async_test]
+    async fn test_simple_case() {
+        let (_temp, client) = create_test_client().await;
+        let write_pool = client.rocket().state::<WritePool>().unwrap();
+
+        let response = client.get(uri!(get_item_raw("bob"))).dispatch().await;
+        assert_eq!(response.status(), Status::NotFound);
+
+        let response = client.get(uri!(get_item("bob"))).dispatch().await;
+        assert_eq!(response.status(), Status::NotFound);
+
+        const ENTRY_CONTENT: &str = "This is a test";
+        let key = io::store_paste(&write_pool, 5, 1000, ENTRY_CONTENT.to_string())
+            .await
+            .unwrap();
+        assert_ne!(key, "");
+
+        let response = client.get(uri!(get_item_raw(&key))).dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(
+            response.into_string().await.unwrap(),
+            ENTRY_CONTENT.to_string()
+        );
+
+        let response = client.get(uri!(get_item(&key))).dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+    }
+
+    #[tokio::test]
+    async fn test_all_entries() {
+        let (_temp, client) = create_test_client().await;
+        let write_pool = client.rocket().state::<WritePool>().unwrap();
+
+        let response = client.get(uri!(all_entries)).dispatch().await;
+        assert_eq!(response.status(), Status::Unauthorized);
+
+        let response = client
+            .get(uri!(all_entries))
+            .header(Header::new("X-API-Key", PASSWORD))
+            .dispatch()
+            .await;
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(response.into_string().await.unwrap(), "{}");
+
+        let key = io::store_paste(&write_pool, 5, 1000, ENTRY_CONTENT.to_string())
+            .await
+            .unwrap();
+        assert_ne!(key, "");
+
+        let response = client
+            .get(uri!(all_entries))
+            .header(Header::new("X-API-Key", PASSWORD))
+            .dispatch()
+            .await;
+        assert_eq!(response.status(), Status::Ok);
+        assert_eq!(response.headers().get("Content-Type").count(), 1);
+        for t in response.headers().get("Content-Type") {
+            assert!(t == "application/json");
+        }
+        let response = response.into_string().await.unwrap();
+        let response_data: HashMap<String, String> = serde_json::de::from_str(&response).unwrap();
+        assert_eq!(
+            response_data,
+            HashMap::from_iter([(key, ENTRY_CONTENT.to_string())])
+        );
     }
 }

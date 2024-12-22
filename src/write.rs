@@ -25,7 +25,7 @@ pub async fn submit(
     } else {
         match store_paste(pool, config.id_length, config.max_entries, form_data.val).await {
             Ok(id) => {
-                let uri = uri!(get::show_paste(id));
+                let uri = uri!(get::get_item(id));
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
@@ -49,7 +49,7 @@ pub async fn submit_with_key(
     } else {
         match store_paste_given_id(pool, key, form_data.val).await {
             Ok(id) => {
-                let uri = uri!(get::show_paste(id));
+                let uri = uri!(get::get_item(id));
                 Ok(Redirect::to(uri))
             }
             Err(e) => {
@@ -80,7 +80,7 @@ pub async fn submit_raw(
 
     match store_paste(pool, config.id_length, config.max_entries, data).await {
         Ok(id) => {
-            let uri = uri!(get::show_paste(id));
+            let uri = uri!(get::get_item(id));
             Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {
@@ -111,7 +111,7 @@ pub async fn submit_raw_with_key(
 
     match store_paste_given_id(pool, key, data).await {
         Ok(id) => {
-            let uri = uri!(get::show_paste(id));
+            let uri = uri!(get::get_item(id));
             Ok(format!("{}{}", config.prefix, uri))
         }
         Err(e) => {

@@ -93,10 +93,10 @@ async fn rocket() -> rocket::Rocket<rocket::Build> {
             write::submit_with_key,
             write::submit_raw,
             write::submit_raw_with_key,
-            get::show_paste,
+            get::get_item,
             get::get_qr,
             get::all_entries,
-            get::get_raw,
+            get::get_item_raw,
             write::delete
         ],
     )
