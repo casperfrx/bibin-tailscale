@@ -108,6 +108,8 @@ mod test {
 
     use super::AuthKey;
 
+    /// Dummy endpoint that returns the authentication
+    /// key for testing purposes
     #[get("/tests/authkey")]
     fn tests_authkey(key: AuthKey) -> String {
         key.0
@@ -142,6 +144,16 @@ mod test {
                 "Authorization",
                 // my_name:my_password
                 "Basic NOT_BASE64",
+            ))
+            .dispatch();
+        assert_eq!(response.status(), Status::Unauthorized);
+
+        let response = client
+            .get(uri!(tests_authkey))
+            .header(Header::new(
+                "Authorization",
+                // my_name:my_password
+                "NotBasic NOT_BASE64",
             ))
             .dispatch();
         assert_eq!(response.status(), Status::Unauthorized);

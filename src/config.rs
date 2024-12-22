@@ -58,4 +58,17 @@ mod tests {
         assert!(serde_json::from_str::<BibinConfig>(r#"{ }"#).is_err());
         assert!(serde_json::from_str::<BibinConfig>(r#"AAAAA"#).is_err());
     }
+
+    #[test]
+    fn check_invalid_json() {
+        assert!(
+            serde_json::from_str::<BibinConfig>(r#"{ "password": A", "prefix": "/" }"#).is_err()
+        );
+        assert!(
+            serde_json::from_str::<BibinConfig>(r#"{ "password": "A", "prefix": 0.3 }"#).is_err()
+        );
+        assert!(
+            serde_json::from_str::<BibinConfig>(r#" "password": "A", "prefix": "/" }"#).is_err()
+        );
+    }
 }

@@ -208,7 +208,6 @@ mod test {
     use crate::io;
     use crate::io::{ReadPool, WritePool};
     use crate::rocket;
-    use rocket::http::ext::IntoCollection;
     use rocket::http::{Header, Status};
     use rocket::local::asynchronous::Client;
     use rocket::tokio;
