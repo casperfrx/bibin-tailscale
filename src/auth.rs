@@ -29,6 +29,16 @@ impl AuthKey {
     }
 }
 
+#[derive(Clone, Deserialize)]
+#[serde(transparent)]
+pub struct TailscaleUser(String);
+
+impl TailscaleUser {
+    pub fn is_valid(&self, tailscale_user: &TailscaleUser) -> bool {
+        tailscale_user.0 == self.0
+    }
+}
+
 impl std::convert::From<base64::DecodeError> for AuthError {
     fn from(error: base64::DecodeError) -> AuthError {
         warn!("[AUTH] Invalid Base64 value: {}", error);

@@ -20,6 +20,7 @@ fn default_database_file() -> String {
 pub struct BibinConfig {
     pub password: auth::AuthKey,
     pub prefix: String,
+    pub tailscale_user: auth::TailscaleUser,
     #[serde(default = "default_id_length")]
     pub id_length: usize,
     #[serde(default = "default_database_file")]
