@@ -2,7 +2,7 @@
     "image": "mcr.microsoft.com/devcontainers/rust:bookworm",
     "init": true,
     "containerEnv": {
-        "CODESPACE_NAME": "gitpod-runner -ssh"
+        "CODESPACE_NAME": "gitpod-runner"
     },
     "features": {
         "ghcr.io/devcontainers/features/docker-in-docker:2": {},
