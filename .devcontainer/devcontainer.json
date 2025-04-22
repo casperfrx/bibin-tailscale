@@ -1,46 +1,51 @@
 {
-  "image": "mcr.microsoft.com/devcontainers/rust:bookworm",
-	"init": true,
-
-   "containerEnv": {
-     "CODESPACE_NAME": "gitpod-runner -ssh"
-     },
-  
-  "features": {
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
-		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/tailscale/codespace/tailscale": {},
-		"ghcr.io/devcontainers-extra/features/vscode-cli:1": {},
-		"ghcr.io/devcontainers-extra/features/vscode-server:1": {},	
-		 "ghcr.io/devcontainers/features/common-utils:2": {
-	           "installZsh": "true",
-	            "username": "automatic",
-	          "userUid": "automatic",
-	         "userGid": "automatic",
-	           "upgradePackages": "false"
-	        },
-	        "ghcr.io/devcontainers/features/git:1": {
-	            "version": "latest",
-	            "ppa": "false"
-	        }
-  },
-  "remoteUser": "vscode",
-	"postAttachCommand": "echo http://\"$(tailscale ip -4)\":8080",
-	"postCreateCommand": [
-		"npm install -g @devcontainers/cli",
-    "sudo chmod +x /usr/local/sbin/tailscaled-devcontainer-start"
-  ],
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "mads-hartmann.bash-ide-vscode",
-        "dbaeumer.vscode-eslint",
-        "editorconfig.editorconfig",
-        "ms-azuretools.vscode-docker"
-      ]
-    }
-  },
-  "mounts": [
-	  "source=${localWorkspaceFolder}/.devcontainer/tailscale/tailscaled-devcontainer-start.sh,target=/usr/local/sbin/tailscaled-devcontainer-start,type=bind,consistency=cached"
-	]
+    "image": "mcr.microsoft.com/devcontainers/rust:bookworm",
+    "init": true,
+    "containerEnv": {
+        "CODESPACE_NAME": "gitpod-runner -ssh"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        "ghcr.io/devcontainers-extra/features/vscode-cli:1": {},
+        "ghcr.io/devcontainers-extra/features/vscode-server:1": {},	
+        "ghcr.io/devcontainers/features/common-utils:2": {
+            "installZsh": "true",
+            "username": "automatic",
+            "userUid": "automatic",
+            "userGid": "automatic",
+            "upgradePackages": "false"
+        },
+        "ghcr.io/devcontainers/features/git:1": {
+            "version": "latest",
+            "ppa": "false"
+        },
+        "ghcr.io/tailscale/codespace/tailscale": {
+            "version": "latest"
+        }
+    },
+    "remoteUser": "vscode",
+    "postAttachCommand": "echo http://\"$(tailscale ip -4)\":8080",
+    "postCreateCommand": [
+        "npm install -g @devcontainers/cli",
+        "sudo chmod +x /usr/local/sbin/tailscaled-devcontainer-start"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+            "mads-hartmann.bash-ide-vscode",
+            "dbaeumer.vscode-eslint",
+            "editorconfig.editorconfig",
+            "ms-azuretools.vscode-docker",
+            "rust-lang.rust",
+            "pinage404.rust-extension-pack",
+            "belfz.search-crates-io",
+            "webfreak.debug",
+            "Swellaby.vscode-rust-test-adapter"
+            ]
+        }
+    },
+    "mounts": [
+        "source=${localWorkspaceFolder}/.devcontainer/tailscale/tailscaled-devcontainer-start.sh,target=/usr/local/sbin/tailscaled-devcontainer-start,type=bind,consistency=cached"
+    ]
 }
