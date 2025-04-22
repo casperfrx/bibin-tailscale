@@ -37,7 +37,7 @@
             "dbaeumer.vscode-eslint",
             "editorconfig.editorconfig",
             "ms-azuretools.vscode-docker",
-            "rust-lang.rust",
+            "rust-lang.rust-analyzer",
             "pinage404.rust-extension-pack",
             "belfz.search-crates-io",
             "webfreak.debug",
